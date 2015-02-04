@@ -5,6 +5,8 @@
 import os
 import sys
 import argparse
+import json
+from urlparse import urlparse
 
 
 class TsuruPool(object):
@@ -18,7 +20,18 @@ class TsuruPool(object):
         self.pool = pool
 
     def get_nodes(self):
-        pass
+        docker_nodes = json.loads(self.__tsuru_request("GET", "/docker/node"))
+        pool_nodes = []
+        if 'machines' in docker_nodes:
+            for node in docker_nodes['machines']:
+                if 'pool' in node['CreationParams'] and node['CreationParams']['pool'] == self.pool:
+                    pool_nodes.append(node['Address'])
+        if 'nodes' in docker_nodes:
+            for node in docker_nodes['nodes']:
+                if 'pool' in node['Metadata'] and node['Metadata']['pool'] == self.pool:
+                    docker_host = urlparse(node['Address']).hostname
+                    pool_nodes.append(docker_host)
+        return pool_nodes
 
     def create_new_node(self, iaas_template):
         pass
@@ -30,6 +43,9 @@ class TsuruPool(object):
         pass
 
     def move_node_containers(self, node, new_node):
+        pass
+
+    def __tsuru_request(self):
         pass
 
 
