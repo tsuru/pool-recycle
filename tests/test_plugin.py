@@ -83,7 +83,7 @@ class TsuruPoolTestCase(unittest.TestCase):
 }
         '''
 
-        tsuru_request_mock.return_value = docker_nodes_json
+        tsuru_request_mock.return_value = (200, docker_nodes_json)
         pool_handler = plugin.TsuruPool("foobar")
         self.assertListEqual(pool_handler.get_nodes(),
                              ['10.10.34.221', '10.23.26.76'])

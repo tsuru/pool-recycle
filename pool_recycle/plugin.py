@@ -20,7 +20,8 @@ class TsuruPool(object):
         self.pool = pool
 
     def get_nodes(self):
-        docker_nodes = json.loads(self.__tsuru_request("GET", "/docker/node"))
+        return_code, docker_nodes = self.__tsuru_request("GET", "/docker/node")
+        docker_nodes = json.loads(docker_nodes)
         pool_nodes = []
         if 'machines' in docker_nodes:
             for node in docker_nodes['machines']:
@@ -34,7 +35,11 @@ class TsuruPool(object):
         return pool_nodes
 
     def create_new_node(self, iaas_template):
-        pass
+        (return_code, body) = self.__tsuru_request("POST", "/docker/node?register=false",
+                                                           {'template': iaas_template})
+        if return_code != 200:
+            return False
+        return True
 
     def remove_node_from_pool(self, node):
         pass
@@ -45,7 +50,7 @@ class TsuruPool(object):
     def move_node_containers(self, node, new_node):
         pass
 
-    def __tsuru_request(self):
+    def __tsuru_request(self, method, path, body=None):
         pass
 
 
