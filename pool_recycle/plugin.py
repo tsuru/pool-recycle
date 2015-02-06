@@ -21,28 +21,34 @@ class TsuruPool(object):
 
     def get_nodes(self):
         return_code, docker_nodes = self.__tsuru_request("GET", "/docker/node")
+        if return_code != 200:
+            return None
         docker_nodes = json.loads(docker_nodes)
         pool_nodes = []
         if 'machines' in docker_nodes:
             for node in docker_nodes['machines']:
-                if 'pool' in node['CreationParams'] and node['CreationParams']['pool'] == self.pool:
+                node_params = node['CreationParams']
+                if 'pool' in node_params and node_params['pool'] == self.pool:
                     pool_nodes.append(node['Address'])
         if 'nodes' in docker_nodes:
             for node in docker_nodes['nodes']:
-                if 'pool' in node['Metadata'] and node['Metadata']['pool'] == self.pool:
+                if ('pool' in node['Metadata'] and
+                   node['Metadata']['pool'] == self.pool):
                     docker_host = urlparse(node['Address']).hostname
                     pool_nodes.append(docker_host)
         return pool_nodes
 
     def create_new_node(self, iaas_template):
-        (return_code, body) = self.__tsuru_request("POST", "/docker/node?register=false",
-                                                           {'template': iaas_template})
+        (return_code,
+         body) = self.__tsuru_request("POST", "/docker/node?register=false",
+                                              {'template': iaas_template})
         if return_code != 200:
             return False
         return True
 
     def get_machines_templates(self):
-        (return_code, machines_templates) = self.__tsuru_request("GET", "/iaas/templates")
+        (return_code,
+         machines_templates) = self.__tsuru_request("GET", "/iaas/templates")
         if return_code != 200:
             return None
         machines_templates = json.loads(machines_templates)
@@ -53,11 +59,12 @@ class TsuruPool(object):
                     iaas_templates.append(template['Name'])
         return iaas_templates
 
-    def remove_node_from_pool(self, node):
-        pass
-
-    def remove_node_from_tsuru(self, node, destroy_node=False):
-        pass
+    def remove_node_from_tsuru(self, node):
+        return_code, _ = self.__tsuru_request("DELETE", "/docker/node",
+                                              {'address': node})
+        if return_code != 200:
+            return False
+        return True
 
     def move_node_containers(self, node, new_node):
         pass
