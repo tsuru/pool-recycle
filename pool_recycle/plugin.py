@@ -41,6 +41,18 @@ class TsuruPool(object):
             return False
         return True
 
+    def get_machines_templates(self):
+        (return_code, machines_templates) = self.__tsuru_request("GET", "/iaas/templates")
+        if return_code != 200:
+            return None
+        machines_templates = json.loads(machines_templates)
+        iaas_templates = []
+        for template in machines_templates:
+            for item in template['Data']:
+                if 'pool' in item['Name'] and self.pool in item['Value']:
+                    iaas_templates.append(template['Name'])
+        return iaas_templates
+
     def remove_node_from_pool(self, node):
         pass
 

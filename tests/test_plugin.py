@@ -87,3 +87,80 @@ class TsuruPoolTestCase(unittest.TestCase):
         pool_handler = plugin.TsuruPool("foobar")
         self.assertListEqual(pool_handler.get_nodes(),
                              ['10.10.34.221', '10.23.26.76'])
+
+    @mock.patch.object(plugin.TsuruPool, '_TsuruPool__tsuru_request')
+    def test_return_machines_templates(self, tsuru_request_mock):
+        machines_templates_json = '''
+[
+    {
+        "Name": "template_red",
+        "IaaSName": "cloudstack_prod",
+        "Data": [
+            {
+                "Name": "pool",
+                "Value": "foobar"
+            },
+            {
+                "Name": "projectid",
+                "Value": "222f0798-e472-4216-a8ed-ce1950f419e8"
+            },
+            {
+                "Name": "displayname",
+                "Value": "test_a"
+            },
+            {
+                "Name": "networkids",
+                "Value": "513ef8b6-bd98-4e6b-89a6-6ca8a859fbb4"
+            }
+        ]
+    },
+    {
+        "Name": "template_blue",
+        "IaaSName": "cloudstack_prod",
+        "Data": [
+            {
+                "Name": "pool",
+                "Value": "infra"
+            },
+            {
+                "Name": "projectid",
+                "Value": "222f0798-e472-4216-a8ed-ce1950f419e8"
+            },
+            {
+                "Name": "displayname",
+                "Value": "test_infra"
+            },
+            {
+                "Name": "networkids",
+                "Value": "97d7ad56-62b4-4d43-805a-2aee42619ac6"
+            }
+        ]
+    },
+    {
+        "Name": "template_yellow",
+        "IaaSName": "cloudstack_dev",
+        "Data": [
+            {
+                "Name": "pool",
+                "Value": "foobar"
+            },
+            {
+                "Name": "projectid",
+                "Value": "222f0798-e472-4216-a8ed-ce1950f419e8"
+            },
+            {
+                "Name": "displayname",
+                "Value": "docker_xxx"
+            },
+            {
+                "Name": "networkids",
+                "Value": "97d7ad56-62b4-4d43-805a-2aee42619ac6"
+            }
+        ]
+    }
+]
+        '''
+        tsuru_request_mock.return_value = (200, machines_templates_json)
+        pool_handler = plugin.TsuruPool("foobar")
+        self.assertListEqual(pool_handler.get_machines_templates(), ['template_red',
+                                                                     'template_yellow'])
