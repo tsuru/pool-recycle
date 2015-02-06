@@ -117,8 +117,8 @@ class TsuruPoolTestCase(unittest.TestCase):
                                          MockResponse(docker_nodes_null_machines)]
         pool_handler = plugin.TsuruPool("foobar")
         self.assertListEqual(pool_handler.get_nodes(), ['10.10.34.221',
-                                                        '10.23.26.76'])
-        self.assertListEqual(pool_handler.get_nodes(), ['127.0.0.1'])
+                                                        'http://10.23.26.76:4243'])
+        self.assertListEqual(pool_handler.get_nodes(), ['http://127.0.0.1:2375'])
 
     def test_return_machines_templates(self):
         machines_templates_json = '''

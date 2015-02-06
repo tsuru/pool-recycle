@@ -35,8 +35,7 @@ class TsuruPool(object):
             for node in docker_nodes['nodes']:
                 if ('pool' in node['Metadata'] and
                    node['Metadata']['pool'] == self.pool):
-                    docker_host = urlparse(node['Address']).hostname
-                    pool_nodes.append(docker_host)
+                    pool_nodes.append(node['Address'])
         return pool_nodes
 
     def create_new_node(self, iaas_template):
@@ -70,6 +69,8 @@ class TsuruPool(object):
         return True
 
     def move_node_containers(self, node, new_node):
+        node = urlparse(node).hostname
+        new_node = urlparse(new_node).hostname
         (return_code,
          move_progress) = self.__tsuru_request("POST",
                                                "/docker/containers/move",
