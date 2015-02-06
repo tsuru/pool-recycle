@@ -4,6 +4,7 @@
 
 import os
 import unittest
+import urllib2
 
 from mock import patch
 from pool_recycle import plugin
@@ -191,10 +192,24 @@ class TsuruPoolTestCase(unittest.TestCase):
     }
 ]
         '''
-        self.urlopen_mock.return_value = MockResponse(machines_templates_json)
+        self.urlopen_mock.side_effect = [MockResponse(machines_templates_json, 200),
+                                         MockResponse(None, 500)]
         pool_handler = plugin.TsuruPool("foobar")
         self.assertListEqual(pool_handler.get_machines_templates(),
                              ['template_red', 'template_yellow'])
+        self.assertEqual(pool_handler.get_machines_templates(), None)
+
+    def test_remove_node_from_tsuru(self):
+        self.urlopen_mock.side_effect = [MockResponse(None, 200),
+                                         urllib2.HTTPError(None, 500,
+                                                           'No such node in storage',
+                                                           *[None] * 2)]
+        pool_handler = plugin.TsuruPool("foobar")
+        self.assertEqual(pool_handler.remove_node_from_tsuru('http://127.0.0.1:4243'),
+                         True)
+        self.assertRaisesRegexp(Exception, 'No such node in storage',
+                                pool_handler.remove_node_from_tsuru,
+                                'http://127.0.0.1:4243')
 
     def tearDown(self):
         self.patcher.stop()

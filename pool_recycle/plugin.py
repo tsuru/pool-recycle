@@ -62,10 +62,10 @@ class TsuruPool(object):
         return iaas_templates
 
     def remove_node_from_tsuru(self, node):
-        return_code, _ = self.__tsuru_request("DELETE", "/docker/node",
-                                              {'address': node})
+        return_code, msg = self.__tsuru_request("DELETE", "/docker/node",
+                                                {'address': node})
         if return_code != 200:
-            return False
+            raise Exception('Error removing node from tsuru: {}'.format(msg))
         return True
 
     def move_node_containers(self, node, new_node):
@@ -96,11 +96,23 @@ class TsuruPool(object):
         request = urllib2.Request(url)
         request.add_header("Authorization", "bearer " + self.tsuru_token)
         request.get_method = lambda: method
+
         if body:
             request.add_data(json.dumps(body))
 
-        response = urllib2.urlopen(request)
-        return response.getcode(), response
+        response_code = response_msg = None
+        try:
+            response = urllib2.urlopen(request)
+        except urllib2.HTTPError as e:
+            response_code = e.code
+            response_msg = e.reason
+            pass
+
+        if response_code:
+            return response_code, response_msg
+
+        response_code = response.getcode()
+        return response_code, response
 
 
 def pool_recycle(pool_name, destroy_node=False, dry_mode=False):
