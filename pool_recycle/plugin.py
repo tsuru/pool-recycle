@@ -54,6 +54,8 @@ class TsuruPool(object):
             return None
         machines_templates = json.loads(machines_templates.read())
         iaas_templates = []
+        if machines_templates is None:
+            return iaas_templates
         for template in machines_templates:
             for item in template['Data']:
                 if 'pool' in item['Name'] and self.pool in item['Value']:
@@ -94,7 +96,7 @@ class TsuruPool(object):
         request.add_header("Authorization", "bearer " + self.tsuru_token)
         request.get_method = lambda: method
         if body:
-            request.add_data(json.dump(body))
+            request.add_data(json.dumps(body))
 
         response = urllib2.urlopen(request)
         return response.getcode(), response
