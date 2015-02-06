@@ -7,13 +7,14 @@ import sys
 import argparse
 import json
 from urlparse import urlparse
+import urllib2
 
 
 class TsuruPool(object):
 
     def __init__(self, pool, dry_mode=False):
         try:
-            self.tsuru_target = os.environ['TSURU_TARGET']
+            self.tsuru_target = os.environ['TSURU_TARGET'].rstrip("/")
             self.tsuru_token = os.environ['TSURU_TOKEN']
         except KeyError:
             raise KeyError("TSURU_TARGET or TSURU_TOKEN envs not set")
@@ -23,7 +24,7 @@ class TsuruPool(object):
         return_code, docker_nodes = self.__tsuru_request("GET", "/docker/node")
         if return_code != 200:
             return None
-        docker_nodes = json.loads(docker_nodes)
+        docker_nodes = json.loads(docker_nodes.read())
         pool_nodes = []
         if 'machines' in docker_nodes:
             for node in docker_nodes['machines']:
@@ -51,7 +52,7 @@ class TsuruPool(object):
          machines_templates) = self.__tsuru_request("GET", "/iaas/templates")
         if return_code != 200:
             return None
-        machines_templates = json.loads(machines_templates)
+        machines_templates = json.loads(machines_templates.read())
         iaas_templates = []
         for template in machines_templates:
             for item in template['Data']:
@@ -67,10 +68,36 @@ class TsuruPool(object):
         return True
 
     def move_node_containers(self, node, new_node):
-        pass
+        (return_code,
+         move_progress) = self.__tsuru_request("POST",
+                                               "/docker/containers/move",
+                                               {'from': node, 'to': new_node})
+        if return_code != 200:
+            return False
+
+        data = move_progress.read(8192)
+
+        while data:
+            move_msg = json.loads(data)
+            if 'Error moving' in move_msg['Message']:
+                moving_error = True
+            print move_msg['Message']
+            data = move_progress.read(8192)
+
+        if moving_error:
+            return False
+        return True
 
     def __tsuru_request(self, method, path, body=None):
-        pass
+        url = "{}{}".format(self.tsuru_target, path)
+        request = urllib2.Request(url)
+        request.add_header("Authorization", "bearer " + self.tsuru_token)
+        request.get_method = lambda: method
+        if body:
+            request.add_data(json.dump(body))
+
+        response = urllib2.urlopen(request)
+        return response.getcode(), response
 
 
 def pool_recycle(pool_name, destroy_node=False, dry_mode=False):

@@ -4,9 +4,24 @@
 
 import os
 import unittest
-import mock
 
+from mock import patch
 from pool_recycle import plugin
+
+
+class MockResponse(object):
+
+    def __init__(self, resp_data, code=200, msg='OK'):
+        self.resp_data = resp_data
+        self.code = code
+        self.msg = msg
+        self.headers = {'content-type': 'text/plain; charset=utf-8'}
+
+    def read(self):
+        return self.resp_data
+
+    def getcode(self):
+        return self.code
 
 
 class TsuruPoolTestCase(unittest.TestCase):
@@ -14,6 +29,8 @@ class TsuruPoolTestCase(unittest.TestCase):
     def setUp(self):
         os.environ["TSURU_TARGET"] = "https://cloud.tsuru.io/"
         os.environ["TSURU_TOKEN"] = "abc123"
+        self.patcher = patch('urllib2.urlopen')
+        self.urlopen_mock = self.patcher.start()
 
     def test_missing_env_var(self):
         del os.environ['TSURU_TOKEN']
@@ -21,8 +38,7 @@ class TsuruPoolTestCase(unittest.TestCase):
                                 "TSURU_TARGET or TSURU_TOKEN envs not set",
                                 plugin.TsuruPool, "foobar")
 
-    @mock.patch.object(plugin.TsuruPool, '_TsuruPool__tsuru_request')
-    def test_get_nodes_from_pool(self, tsuru_request_mock):
+    def test_get_nodes_from_pool(self):
         docker_nodes_json = '''
 {
     "machines": [
@@ -82,14 +98,12 @@ class TsuruPoolTestCase(unittest.TestCase):
     ]
 }
         '''
-
-        tsuru_request_mock.return_value = (200, docker_nodes_json)
+        self.urlopen_mock.return_value = MockResponse(docker_nodes_json)
         pool_handler = plugin.TsuruPool("foobar")
         self.assertListEqual(pool_handler.get_nodes(),
                              ['10.10.34.221', '10.23.26.76'])
 
-    @mock.patch.object(plugin.TsuruPool, '_TsuruPool__tsuru_request')
-    def test_return_machines_templates(self, tsuru_request_mock):
+    def test_return_machines_templates(self):
         machines_templates_json = '''
 [
     {
@@ -160,7 +174,10 @@ class TsuruPoolTestCase(unittest.TestCase):
     }
 ]
         '''
-        tsuru_request_mock.return_value = (200, machines_templates_json)
+        self.urlopen_mock.return_value = MockResponse(machines_templates_json)
         pool_handler = plugin.TsuruPool("foobar")
-        self.assertListEqual(pool_handler.get_machines_templates(), ['template_red',
-                                                                     'template_yellow'])
+        self.assertListEqual(pool_handler.get_machines_templates(),
+                             ['template_red', 'template_yellow'])
+
+    def tearDown(self):
+        self.patcher.stop()
