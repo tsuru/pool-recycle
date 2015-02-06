@@ -98,10 +98,27 @@ class TsuruPoolTestCase(unittest.TestCase):
     ]
 }
         '''
-        self.urlopen_mock.return_value = MockResponse(docker_nodes_json)
+        docker_nodes_null_machines = '''
+{
+    "machines": null,
+    "nodes": [
+        {
+            "Address": "http://127.0.0.1:2375",
+            "Metadata": {
+                "LastSuccess": "2015-02-05T11:46:42Z",
+                "pool": "foobar"
+            },
+            "Status": "ready"
+        }
+    ]
+}
+        '''
+        self.urlopen_mock.side_effect = [MockResponse(docker_nodes_json),
+                                         MockResponse(docker_nodes_null_machines)]
         pool_handler = plugin.TsuruPool("foobar")
-        self.assertListEqual(pool_handler.get_nodes(),
-                             ['10.10.34.221', '10.23.26.76'])
+        self.assertListEqual(pool_handler.get_nodes(), ['10.10.34.221',
+                                                        '10.23.26.76'])
+        self.assertListEqual(pool_handler.get_nodes(), ['127.0.0.1'])
 
     def test_return_machines_templates(self):
         machines_templates_json = '''

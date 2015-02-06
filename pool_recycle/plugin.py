@@ -26,12 +26,12 @@ class TsuruPool(object):
             return None
         docker_nodes = json.loads(docker_nodes.read())
         pool_nodes = []
-        if 'machines' in docker_nodes:
+        if 'machines' in docker_nodes and docker_nodes['machines'] is not None:
             for node in docker_nodes['machines']:
                 node_params = node['CreationParams']
                 if 'pool' in node_params and node_params['pool'] == self.pool:
                     pool_nodes.append(node['Address'])
-        if 'nodes' in docker_nodes:
+        if 'nodes' in docker_nodes and docker_nodes['nodes'] is not None:
             for node in docker_nodes['nodes']:
                 if ('pool' in node['Metadata'] and
                    node['Metadata']['pool'] == self.pool):
