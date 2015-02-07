@@ -120,6 +120,7 @@ class TsuruPool(object):
     def json_parser(fileobj, decoder=json.JSONDecoder(), buffersize=2048):
         buffer = ''
         first_chunk = True
+        recheck_first_chunk = False
         for chunk in iter(partial(fileobj.read, buffersize), ''):
             buffer += chunk
             while buffer:
@@ -138,8 +139,12 @@ class TsuruPool(object):
                         index_first_chunk = 0
                         while (index_first_chunk < len(buffer)) and (buffer[index_first_chunk] != '{'):
                             index_first_chunk = index_first_chunk + 1
+                            recheck_first_chunk = True
                         buffer = buffer[index_first_chunk:]
                         first_chunk = False
+                        if recheck_first_chunk:
+                            recheck_first_chunk = False
+                            continue
                     # Not enough data to decode, read more
                     break
 

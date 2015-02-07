@@ -219,25 +219,14 @@ class TsuruPoolTestCase(unittest.TestCase):
     @patch("sys.stderr")
     @patch("sys.stdout")
     def test_move_node_containers(self, stdout, stderr):
-        fake_buffer_error = u'''garbage in first chunk\
-{"Message":"Moving 2 units..."}\n
-{"Message":"Error moving container: Error moving unit \
-0649a6879efd3672784440ff150d284f6c0c711df6c5848fd2c4b08d8412d15b. Caused by:\
-Error trying to pull image in node \\"http:\\/\\/10.10.1.2:123\\""}\n
-{"Message":"Error moving container: Error moving unit \
-0649a6879efd3672784440ff150d284f6c0c711df6c5848fd2c4b08d8412d15b. Caused by:\
-Error trying to pull image in node \\"http:\\/\\/10.10.1.3:123\\""}
-'''
-        fake_buffer_error_response = ['{"Message":"Moving 2 units..."}', '{"Message":"Error moving container: Error moving unit \
-0649a6879efd3672784440ff150d284f6c0c711df6c5848fd2c4b08d8412d15b. Caused by:\
-Error trying to pull image in node \\"http:\\/\\/10.10.1.2:123\\""}',
-'{"Message":"Error moving container: Error moving unit \
-0649a6879efd3672784440ff150d284f6c0c711df6c5848fd2c4b08d8412d15b. Caused by:\
-Error trying to pull image in node \\"http:\\/\\/10.10.1.3:123\\""}']
+        fake_buffer_error = u'''garbage in first chunk\ {"Message":"Moving 2 units..."}\n
+                                {"Message":"Error moving unit: abcd1234"}\n
+                                {"Message":"Error moving unit: xyzabcd234"}\n
+                            '''
 
         fake_buffer_successfully = u'''
-     { "Message" : "Container moved successfully" }
-        '''
+                                   { "Message":"Container moved successfully" }
+                                   '''
 
         fake_empty_buffer = u''
 
@@ -248,16 +237,15 @@ Error trying to pull image in node \\"http:\\/\\/10.10.1.3:123\\""}']
         pool_handler = plugin.TsuruPool("foobar")
         move_return_value = pool_handler.move_node_containers('http://10.10.1.2:123',
                                                               '1.2.3.4:2222')
-        stdout.write.assert_called_with("{}\n".format(json.loads(fake_buffer_error_response[0])['Message']))
-        stderr.write.assert_called_with("{}\n".format(json.loads(fake_buffer_error_response[1])['Message']))
-        stderr.write.assert_called_with("{}\n".format(json.loads(fake_buffer_error_response[2])['Message']))
+        stdout.write.assert_called_with("Moving 2 units...\n")
+        stderr.write.assert_has_call("Error moving unit: abcd1234\n")
+        stderr.write.assert_has_call("Error moving unit: xyzabcd234\n")
         self.assertEqual(move_return_value, False)
 
         move_return_value_2 = pool_handler.move_node_containers('http://10.1.1.2:123',
                                                                 '1.2.3.7:432')
         stdout.write.assert_called_with("{}\n".format(json.loads(fake_buffer_successfully)['Message']))
         self.assertEqual(move_return_value_2, True)
-
 
         move_return_value_3 = pool_handler.move_node_containers('http://10.10.1.2:123',
                                                                 'http://1.2.3.4:432')
