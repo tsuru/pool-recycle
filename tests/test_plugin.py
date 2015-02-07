@@ -236,20 +236,25 @@ class TsuruPoolTestCase(unittest.TestCase):
 
         pool_handler = plugin.TsuruPool("foobar")
         move_return_value = pool_handler.move_node_containers('http://10.10.1.2:123',
-                                                              '1.2.3.4:2222')
+                                                              'https://1.2.3.4')
+
         stdout.write.assert_called_with("Moving 2 units...\n")
         stderr.write.assert_has_call("Error moving unit: abcd1234\n")
         stderr.write.assert_has_call("Error moving unit: xyzabcd234\n")
         self.assertEqual(move_return_value, False)
 
         move_return_value_2 = pool_handler.move_node_containers('http://10.1.1.2:123',
-                                                                '1.2.3.7:432')
+                                                                '1.2.3.7')
         stdout.write.assert_called_with("{}\n".format(json.loads(fake_buffer_successfully)['Message']))
         self.assertEqual(move_return_value_2, True)
 
         move_return_value_3 = pool_handler.move_node_containers('http://10.10.1.2:123',
                                                                 'http://1.2.3.4:432')
         self.assertEqual(move_return_value_3, True)
+
+        self.assertRaisesRegexp(Exception, 'node address .+ are invalids',
+                                pool_handler.move_node_containers,
+                                'http://10.10.1.2:123', '1.2.3.4:432')
 
     def tearDown(self):
         self.patcher.stop()

@@ -7,9 +7,10 @@ import sys
 import argparse
 import json
 import urllib2
+import socket
 
-from urlparse import urlparse
 from functools import partial
+from urlparse import urlparse
 
 
 class TsuruPool(object):
@@ -71,8 +72,12 @@ class TsuruPool(object):
         return True
 
     def move_node_containers(self, node, new_node):
-        node_from = urlparse(node).hostname
-        node_to = urlparse(new_node).hostname
+        node_from = self.get_address(node)
+        node_to = self.get_address(new_node)
+        if node_from is None or node_to is None:
+            raise Exception("Error moving node containers: node address {} or {}\
+ are invalids".format(node, new_node))
+
         (return_code,
          move_progress) = self.__tsuru_request("POST",
                                                "/docker/containers/move",
@@ -115,6 +120,14 @@ class TsuruPool(object):
 
         response_code = response.getcode()
         return response_code, response
+
+    @staticmethod
+    def get_address(node_name):
+        try:
+            socket.inet_aton(node_name)
+            return(node_name)
+        except socket.error:
+            return urlparse(node_name).hostname
 
     @staticmethod
     def json_parser(fileobj, decoder=json.JSONDecoder(), buffersize=2048):
