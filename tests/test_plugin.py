@@ -8,7 +8,7 @@ import urllib2
 import json
 
 from io import StringIO
-from mock import patch
+from mock import patch, Mock
 from pool_recycle import plugin
 
 
@@ -127,6 +127,17 @@ class TsuruPoolTestCase(unittest.TestCase):
         self.assertListEqual(pool_handler.get_nodes(), ['10.10.34.221',
                                                         'http://10.23.26.76:4243'])
         self.assertListEqual(pool_handler.get_nodes(), ['http://127.0.0.1:2375'])
+
+    def test_create_new_node(self):
+        self.urlopen_mock.return_value = MockResponse(None, 200)
+        pool_handler = plugin.TsuruPool("foobar")
+        pool_handler.get_nodes = Mock()
+        pool_handler.get_nodes.side_effect = [['192.168.1.1', 'http://10.1.1.1:2723',
+                                               '10.10.10.1'],
+                                              ['192.168.1.1', '10.2.3.2', '10.10.10.1',
+                                               'http://10.1.1.1:2723']]
+        return_new_node = pool_handler.create_new_node("my_template")
+        self.assertEqual(return_new_node, '10.2.3.2')
 
     def test_return_machines_templates(self):
         machines_templates_json = u'''
