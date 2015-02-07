@@ -6,8 +6,10 @@ import os
 import sys
 import argparse
 import json
-from urlparse import urlparse
 import urllib2
+
+from urlparse import urlparse
+from functools import partial
 
 
 class TsuruPool(object):
@@ -65,27 +67,27 @@ class TsuruPool(object):
         return_code, msg = self.__tsuru_request("DELETE", "/docker/node",
                                                 {'address': node})
         if return_code != 200:
-            raise Exception('Error removing node from tsuru: {}'.format(msg))
+            raise Exception('Error removing node from tsuru: "{}"'.format(msg))
         return True
 
     def move_node_containers(self, node, new_node):
-        node = urlparse(node).hostname
-        new_node = urlparse(new_node).hostname
+        node_from = urlparse(node).hostname
+        node_to = urlparse(new_node).hostname
         (return_code,
          move_progress) = self.__tsuru_request("POST",
                                                "/docker/containers/move",
-                                               {'from': node, 'to': new_node})
+                                               {'from': node_from, 'to': node_to})
         if return_code != 200:
+            raise Exception('Error moving containers on tsuru: "{}"'.format(move_progress))
             return False
 
-        data = move_progress.read(8192)
-
-        while data:
-            move_msg = json.loads(data)
+        moving_error = False
+        for move_msg in self.json_parser(move_progress):
             if 'Error moving' in move_msg['Message']:
                 moving_error = True
-            print move_msg['Message']
-            data = move_progress.read(8192)
+                sys.stderr.write("{}\n".format(move_msg['Message']))
+            else:
+                sys.stdout.write("{}\n".format(move_msg['Message']))
 
         if moving_error:
             return False
@@ -105,7 +107,7 @@ class TsuruPool(object):
             response = urllib2.urlopen(request)
         except urllib2.HTTPError as e:
             response_code = e.code
-            response_msg = e.reason
+            response_msg = e.read().rstrip("\n")
             pass
 
         if response_code:
@@ -113,6 +115,33 @@ class TsuruPool(object):
 
         response_code = response.getcode()
         return response_code, response
+
+    @staticmethod
+    def json_parser(fileobj, decoder=json.JSONDecoder(), buffersize=2048):
+        buffer = ''
+        first_chunk = True
+        for chunk in iter(partial(fileobj.read, buffersize), ''):
+            buffer += chunk
+            while buffer:
+                try:
+                    result, index = decoder.raw_decode(buffer)
+                    first_chunk = False
+                    # Try to move index to next json
+                    while (index < len(buffer)) and (buffer[index] != '{'):
+                        index = index + 1
+                    yield result
+                    buffer = buffer[index:]
+                except ValueError:
+                    # Try to cleanup first chunk until find initial json
+                    # string
+                    if first_chunk:
+                        index_first_chunk = 0
+                        while (index_first_chunk < len(buffer)) and (buffer[index_first_chunk] != '{'):
+                            index_first_chunk = index_first_chunk + 1
+                        buffer = buffer[index_first_chunk:]
+                        first_chunk = False
+                    # Not enough data to decode, read more
+                    break
 
 
 def pool_recycle(pool_name, destroy_node=False, dry_mode=False):
