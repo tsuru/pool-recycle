@@ -8,7 +8,7 @@ import urllib2
 import json
 
 from io import StringIO
-from mock import patch, Mock
+from mock import patch, Mock, call
 from pool_recycle import plugin
 from pool_recycle.plugin import MoveNodeContainersError
 
@@ -277,6 +277,29 @@ class TsuruPoolTestCase(unittest.TestCase):
         self.assertRaisesRegexp(MoveNodeContainersError, 'node address .+ are invalids',
                                 pool_handler.move_node_containers,
                                 'http://10.10.1.2:123', '1.2.3.4:432')
+
+    @patch("sys.stdout")
+    @patch('pool_recycle.plugin.TsuruPool.get_nodes')
+    @patch('pool_recycle.plugin.TsuruPool.get_machines_templates')
+    def test_pool_recycle_on_dry_mode(self, get_machines_templates, get_nodes, stdout):
+        get_machines_templates.return_value = ['templateA', 'templateB', 'templateC']
+        get_nodes.return_value = ['http://127.0.0.1:4243', '10.10.2.2',
+                                  '10.2.3.2', 'http://2.3.2.1:2123']
+        plugin.pool_recycle('foobar', False, True)
+        call_stdout_list = [call('Creating new node on pool "foobar" using "templateA" template\n'),
+                            call('Removing node "http://127.0.0.1:4243" from pool "foobar"\n'),
+                            call('Moving all containers on old node "http://127.0.0.1:4243" to new node\n\n'),
+                            call('Creating new node on pool "foobar" using "templateB" template\n'),
+                            call('Removing node "10.10.2.2" from pool "foobar"\n'),
+                            call('Moving all containers on old node "10.10.2.2" to new node\n\n'),
+                            call('Creating new node on pool "foobar" using "templateC" template\n'),
+                            call('Removing node "10.2.3.2" from pool "foobar"\n'),
+                            call('Moving all containers on old node "10.2.3.2" to new node\n\n'),
+                            call('Creating new node on pool "foobar" using "templateA" template\n'),
+                            call('Removing node "http://2.3.2.1:2123" from pool "foobar"\n'),
+                            call('Moving all containers on old node "http://2.3.2.1:2123" to new node\n\n')]
+
+        self.assertEqual(stdout.write.call_args_list, call_stdout_list)
 
     def tearDown(self):
         self.patcher.stop()
