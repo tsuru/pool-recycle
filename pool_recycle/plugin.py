@@ -43,7 +43,7 @@ class RemoveNodeFromPoolError(Exception):
         self.name = name
 
     def __str__(self):
-        return 'Error moving node containers: "{}"'.format(self.name)
+        return 'Error removing node from pool: "{}"'.format(self.name)
 
     def __unicode__(self):
         return unicode(str(self))
