@@ -230,6 +230,14 @@ def pool_recycle(pool_name, destroy_node=False, dry_mode=False, docker_port='424
     templates_len = len(pool_templates)
     template_idx = 0
     for node in pool_handler.get_nodes():
+        if dry_mode:
+            sys.stdout.write('Creating new node on pool "{}" using "{}" '
+                             'template\n'.format(pool_name, pool_templates[template_idx]))
+            sys.stdout.write('Removing node "{}" from pool "{}"\n'.format(node, pool_name))
+            sys.stdout.write('Moving all containers on old node "{}" to new node\n\n'.format(node))
+            if template_idx >= templates_len:
+                template_idx = 0
+            continue
         try:
             new_node = pool_handler.create_new_node(pool_templates[template_idx])
             pool_handler.remove_node_from_tsuru(node)
@@ -250,12 +258,13 @@ def pool_recycle_parser(args):
     parser.add_argument("-d", "--dry-run", required=False, action='store_true',
                         help="Dry run all recycle actions")
     parser.add_argument("-P", "--docker-port", required=False, default='4243',
-                        help="Docker port - if something goes wrong, \
-                              node will be re-add using it as docker port \
-                              (only when using IaaS)")
-    parser.add_argument("-s", "--docker-scheme", required=False, default='http',
-                        help="Docker scheme - if something goes wrong, node will be \
-                                re-add using it as docker scheme (only when using IaaS)")
+                        help="Docker port - if something goes wrong, "
+                             "node will be re-add using it as docker port "
+                             "(only when using IaaS)")
+    parser.add_argument("-s", "--docker-scheme", required=False,
+                        default='http', help="Docker scheme - if something goes "
+                        "wrong, node will be re-add using it as docker scheme "
+                        "(only when using IaaS)")
     parsed = parser.parse_args(args)
     pool_recycle(parsed.pool, parsed.destroy_node, parsed.dry_run,
                  parsed.docker_port, parsed.docker_scheme)
