@@ -8,6 +8,7 @@ import argparse
 import json
 import urllib2
 import socket
+import re
 
 from functools import partial
 from urlparse import urlparse
@@ -78,8 +79,15 @@ class TsuruPool(object):
                     pool_nodes.append(node['Address'])
         return pool_nodes
 
-    def add_node_to_pool(self, node):
-        pass
+    def add_node_to_pool(self, node_url, docker_port, docker_scheme):
+        if not (re.match(r'^[a-zA-Z]+://', node_url)):
+            node_url = '{}://{}:{}'.format(docker_scheme, node_url, docker_port)
+        (return_code,
+         msg) = self.__tsuru_request("POST", "/docker/node?register=false",
+                                             {"address": node_url, "pool": self.pool})
+        if return_code != 200:
+            raise NewNodeError(msg)
+        return True
 
     def create_new_node(self, iaas_template):
         actual_nodes_list = self.get_nodes()
@@ -213,7 +221,8 @@ class TsuruPool(object):
                     break
 
 
-def pool_recycle(pool_name, destroy_node=False, dry_mode=False):
+def pool_recycle(pool_name, destroy_node=False, dry_mode=False, docker_port='4243',
+                 docker_scheme='http'):
     pool_handler = TsuruPool(pool_name, dry_mode)
     pool_templates = pool_handler.get_machines_templates()
     if pool_templates == []:
@@ -229,7 +238,7 @@ def pool_recycle(pool_name, destroy_node=False, dry_mode=False):
                 template_idx = 0
         except (MoveNodeContainersError, RemoveNodeFromPoolError):
             ''' Try to re-insert node on pool '''
-            pool_handler.add_node_to_pool(node)
+            pool_handler.add_node_to_pool(node, docker_port, docker_scheme)
 
 
 def pool_recycle_parser(args):
@@ -240,8 +249,16 @@ def pool_recycle_parser(args):
                         help="Destroy olds docker nodes after recycle")
     parser.add_argument("-d", "--dry-run", required=False, action='store_true',
                         help="Dry run all recycle actions")
+    parser.add_argument("-P", "--docker-port", required=False, default='4243',
+                        help="Docker port - if something goes wrong, \
+                              node will be re-add using it as docker port \
+                              (only when using IaaS)")
+    parser.add_argument("-s", "--docker-scheme", required=False, default='http',
+                        help="Docker scheme - if something goes wrong, node will be \
+                                re-add using it as docker scheme (only when using IaaS)")
     parsed = parser.parse_args(args)
-    pool_recycle(parsed.pool, parsed.destroy_node, parsed.dry_run)
+    pool_recycle(parsed.pool, parsed.destroy_node, parsed.dry_run,
+                 parsed.docker_port, parsed.docker_scheme)
 
 
 def main(args=None):

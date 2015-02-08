@@ -140,6 +140,15 @@ class TsuruPoolTestCase(unittest.TestCase):
         return_new_node = pool_handler.create_new_node("my_template")
         self.assertEqual(return_new_node, '10.2.3.2')
 
+    @patch.object(plugin.TsuruPool, '_TsuruPool__tsuru_request')
+    def test_add_node_to_pool(self, mocked_tsuru_request):
+        mocked_tsuru_request.return_value = (200, None)
+        pool_handler = plugin.TsuruPool("foobar")
+        pool_handler.add_node_to_pool('127.0.0.1', '4243', 'http')
+        node_add_dict = {'address': 'http://127.0.0.1:4243', 'pool': 'foobar'}
+        mocked_tsuru_request.assert_called_once_with("POST", "/docker/node?register=false",
+                                                     node_add_dict)
+
     def test_return_machines_templates(self):
         machines_templates_json = u'''
 [
