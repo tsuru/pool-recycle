@@ -10,6 +10,7 @@ import json
 from io import StringIO
 from mock import patch, Mock
 from pool_recycle import plugin
+from pool_recycle.plugin import MoveNodeContainersError
 
 
 class MockResponse(StringIO):
@@ -215,7 +216,8 @@ class TsuruPoolTestCase(unittest.TestCase):
         pool_handler = plugin.TsuruPool("foobar")
         self.assertListEqual(pool_handler.get_machines_templates(),
                              ['template_red', 'template_yellow'])
-        self.assertEqual(pool_handler.get_machines_templates(), None)
+        self.assertRaisesRegexp(Exception, 'Error getting machines templates',
+                                pool_handler.get_machines_templates)
 
     def test_remove_node_from_tsuru(self):
         http_error = urllib2.HTTPError(None, 500, None, None, StringIO(u"No such node in storage"))
@@ -263,7 +265,7 @@ class TsuruPoolTestCase(unittest.TestCase):
                                                                 'http://1.2.3.4:432')
         self.assertEqual(move_return_value_3, True)
 
-        self.assertRaisesRegexp(Exception, 'node address .+ are invalids',
+        self.assertRaisesRegexp(MoveNodeContainersError, 'node address .+ are invalids',
                                 pool_handler.move_node_containers,
                                 'http://10.10.1.2:123', '1.2.3.4:432')
 

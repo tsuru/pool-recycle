@@ -13,6 +13,42 @@ from functools import partial
 from urlparse import urlparse
 
 
+class NewNodeError(Exception):
+    def __init__(self, name):
+        super(Exception, self).__init__(name)
+        self.name = name
+
+    def __str__(self):
+        return 'Error creating new node: "{}"'.format(self.name)
+
+    def __unicode__(self):
+        return unicode(str(self))
+
+
+class MoveNodeContainersError(Exception):
+    def __init__(self, name):
+        super(Exception, self).__init__(name)
+        self.name = name
+
+    def __str__(self):
+        return 'Error moving node containers: "{}"'.format(self.name)
+
+    def __unicode__(self):
+        return unicode(str(self))
+
+
+class RemoveNodeFromPoolError(Exception):
+    def __init__(self, name):
+        super(Exception, self).__init__(name)
+        self.name = name
+
+    def __str__(self):
+        return 'Error moving node containers: "{}"'.format(self.name)
+
+    def __unicode__(self):
+        return unicode(str(self))
+
+
 class TsuruPool(object):
 
     def __init__(self, pool, dry_mode=False):
@@ -26,7 +62,7 @@ class TsuruPool(object):
     def get_nodes(self):
         return_code, docker_nodes = self.__tsuru_request("GET", "/docker/node")
         if return_code != 200:
-            raise Exception('Error get nodes from\
+            raise Exception('Error get nodes from \
                              tsuru: "{}"'.format(docker_nodes))
         docker_nodes = json.loads(docker_nodes.read())
         pool_nodes = []
@@ -42,13 +78,17 @@ class TsuruPool(object):
                     pool_nodes.append(node['Address'])
         return pool_nodes
 
+    def add_node_to_pool(self, node):
+        pass
+
     def create_new_node(self, iaas_template):
         actual_nodes_list = self.get_nodes()
         (return_code,
-         body) = self.__tsuru_request("POST", "/docker/node?register=false",
-                                              {'template': iaas_template})
+         msg) = self.__tsuru_request("POST", "/docker/node?register=false",
+                                             {'template': iaas_template})
         if return_code != 200:
-            return False
+            raise NewNodeError(msg)
+
         new_nodes_list = self.get_nodes()
         new_node = set(new_nodes_list) - set(actual_nodes_list)
         if len(new_node) == 1:
@@ -59,7 +99,8 @@ class TsuruPool(object):
         (return_code,
          machines_templates) = self.__tsuru_request("GET", "/iaas/templates")
         if return_code != 200:
-            return None
+            raise Exception('Error getting machines templates \
+                             on tsuru: "{}"'.format(machines_templates))
         machines_templates = json.loads(machines_templates.read())
         iaas_templates = []
         if machines_templates is None:
@@ -77,15 +118,15 @@ class TsuruPool(object):
         return_code, msg = self.__tsuru_request("DELETE", "/docker/node",
                                                 headers)
         if return_code != 200:
-            raise Exception('Error removing node from tsuru: "{}"'.format(msg))
+            raise RemoveNodeFromPoolError(msg)
         return True
 
     def move_node_containers(self, node, new_node):
         node_from = self.get_address(node)
         node_to = self.get_address(new_node)
         if node_from is None or node_to is None:
-            raise Exception("Error moving node containers: node address {} or {}\
- are invalids".format(node, new_node))
+            raise MoveNodeContainersError('node address {} or {}\
+                                                - are invalids'.format(node, new_node))
 
         (return_code,
          move_progress) = self.__tsuru_request("POST",
@@ -93,8 +134,7 @@ class TsuruPool(object):
                                                {'from': node_from,
                                                 'to': node_to})
         if return_code != 200:
-            raise Exception('Error moving containers\
-                             on tsuru: "{}"'.format(move_progress))
+            raise MoveNodeContainersError(move_progress)
             return False
 
         moving_error = False
@@ -175,15 +215,21 @@ class TsuruPool(object):
 
 def pool_recycle(pool_name, destroy_node=False, dry_mode=False):
     pool_handler = TsuruPool(pool_name, dry_mode)
+    pool_templates = pool_handler.get_machines_templates()
+    if pool_templates == []:
+        raise Exception('Pool "{}" does not contain any template associate'.format(pool_name))
+    templates_len = len(pool_templates)
+    template_idx = 0
     for node in pool_handler.get_nodes():
         try:
-            new_node = pool_handler.create_new_node()
-            pool_handler.remove_node_from_pool(node)
+            new_node = pool_handler.create_new_node(pool_templates[template_idx])
+            pool_handler.remove_node_from_tsuru(node)
             pool_handler.move_node_containers(node, new_node)
-        except:
-            """ Verify possible exceptions and actions """
-
-        pool_handler.remove_node_from_tsuru(node, destroy_node)
+            if template_idx >= templates_len:
+                template_idx = 0
+        except (MoveNodeContainersError, RemoveNodeFromPoolError):
+            ''' Try to re-insert node on pool '''
+            pool_handler.add_node_to_pool(node)
 
 
 def pool_recycle_parser(args):
