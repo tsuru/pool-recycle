@@ -1,4 +1,5 @@
 # Pool Recycle plugin for tsuru
+[![Build Status](https://travis-ci.org/tsuru/pool-recycle.svg)](https://travis-ci.org/tsuru/pool-recycle)
 
 This plugin allows tsuru to re-create one entire pool based on IaaS templates associate with it.
 
