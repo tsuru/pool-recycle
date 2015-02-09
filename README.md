@@ -1,6 +1,6 @@
 # Pool Recycle plugin for tsuru
 
-This plugin allows tsuru to recreate one entire pool based on IaaS templates associate with it.
+This plugin allows tsuru to re-create one entire pool based on IaaS templates associate with it.
 
 ## Dependencies
 You will need just admin permission in tsuru.
