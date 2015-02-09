@@ -11,6 +11,7 @@ import json
 import urllib2
 import socket
 import re
+import time
 
 from functools import partial
 from urlparse import urlparse
@@ -77,7 +78,7 @@ class TsuruPool(object):
         return pool_nodes
 
     def add_node_to_pool(self, node_url, docker_port, docker_scheme):
-        if not (re.match(r'^[a-zA-Z]+://', node_url)):
+        if not (re.match(r'^https?://', node_url)):
             node_url = '{}://{}:{}'.format(docker_scheme, node_url, docker_port)
         (return_code,
          msg) = self.__tsuru_request("POST", "/docker/node?register=false",
@@ -126,7 +127,7 @@ class TsuruPool(object):
             raise RemoveNodeFromPoolError(msg)
         return True
 
-    def move_node_containers(self, node, new_node):
+    def move_node_containers(self, node, new_node, cur_retry=0, max_retry=10, wait_timeout=180):
         node_from = self.get_address(node)
         node_to = self.get_address(new_node)
         if node_from is None or node_to is None:
@@ -143,12 +144,27 @@ class TsuruPool(object):
             return False
 
         moving_error = False
+        retry_move = False
         for move_msg in self.json_parser(move_progress):
-            if 'Error moving' in move_msg['Message']:
+            if 'Error' in move_msg['Message']:
                 moving_error = True
                 sys.stderr.write("{}\n".format(move_msg['Message']))
             else:
                 sys.stdout.write("{}\n".format(move_msg['Message']))
+
+            if 'cannot connect to Docker endpoint' in move_msg['Message']:
+                retry_move = True
+
+        if retry_move and cur_retry < max_retry:
+            sys.stdout.write("Retrying move containers from {} to {}. "
+                             "Waiting for {} seconds...".format(node, new_node, wait_timeout))
+            time.sleep(wait_timeout)
+            return self.move_node_containers(node, new_node, cur_retry + 1)
+        elif cur_retry >= max_retry:
+            sys.stderr.write("Error: Max retry reached on {} attempts. "
+                             "Move node containers aborted on error moving "
+                             "from {} to {}".format(max_retry, node, new_node))
+            return False
 
         if moving_error:
             return False
