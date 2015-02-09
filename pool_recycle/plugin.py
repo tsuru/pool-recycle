@@ -62,7 +62,7 @@ class TsuruPool(object):
 
     def get_nodes(self):
         return_code, docker_nodes = self.__tsuru_request("GET", "/docker/node")
-        if return_code != 200:
+        if return_code not in [200, 201, 204]:
             raise Exception('Error get nodes from '
                             'tsuru: "{}"'.format(docker_nodes))
         docker_nodes = json.loads(docker_nodes.read())
@@ -85,7 +85,7 @@ class TsuruPool(object):
         (return_code,
          msg) = self.__tsuru_request("POST", "/docker/node?register=false",
                                              {"address": node_url, "pool": self.pool})
-        if return_code != 200:
+        if return_code not in [200, 201, 204]:
             raise NewNodeError(msg)
         return True
 
@@ -94,7 +94,7 @@ class TsuruPool(object):
         (return_code,
          msg) = self.__tsuru_request("POST", "/docker/node?register=false",
                                              {'template': iaas_template})
-        if return_code != 200:
+        if return_code not in [200, 201, 204]:
             raise NewNodeError(msg)
 
         new_nodes_list = self.get_nodes()
@@ -106,7 +106,7 @@ class TsuruPool(object):
     def get_machines_templates(self):
         (return_code,
          machines_templates) = self.__tsuru_request("GET", "/iaas/templates")
-        if return_code != 200:
+        if return_code not in [200, 201, 204]:
             raise Exception('Error getting machines templates '
                             'on tsuru: "{}"'.format(machines_templates))
         machines_templates = json.loads(machines_templates.read())
@@ -125,7 +125,7 @@ class TsuruPool(object):
             headers['remove_iaas'] = "true"
         return_code, msg = self.__tsuru_request("DELETE", "/docker/node",
                                                 headers)
-        if return_code != 200:
+        if return_code not in [200, 201, 204]:
             raise RemoveNodeFromPoolError(msg)
         return True
 
@@ -141,7 +141,7 @@ class TsuruPool(object):
                                                "/docker/containers/move",
                                                {'from': node_from,
                                                 'to': node_to})
-        if return_code != 200:
+        if return_code not in [200, 201, 204]:
             raise MoveNodeContainersError(move_progress)
             return False
 
