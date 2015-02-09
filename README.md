@@ -9,7 +9,7 @@ You will need just admin permission in tsuru.
 
 As easy as any other tsuru plugin (use the same command to upgrade)
 ```bash
-$ tsuru plugin-install admtools https://raw.githubusercontent.com/tsuru/pool-recycle/master/pool_recycle/plugin.py
+$ tsuru plugin-install pool-recycle https://raw.githubusercontent.com/tsuru/pool-recycle/master/pool_recycle/plugin.py
 $ tsuru pool-recycle -h 
 usage: pool-recycle [-h] -p POOL [-r DESTROY_NODE] [-d] [-P DOCKER_PORT]
                     [-s DOCKER_SCHEME]
