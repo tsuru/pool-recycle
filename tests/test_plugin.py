@@ -132,21 +132,6 @@ class TsuruPoolTestCase(unittest.TestCase):
             "Address": "http://10.25.23.138:4243",
             "Metadata": {
                 "LastSuccess": "2015-02-04T11:47:54-02:00",
-                "pool": "whatever"
-            },
-            "Status": "ready"
-        }
-    ]
-}
-        '''
-        docker_nodes_null_machines = u'''
-{
-    "machines": null,
-    "nodes": [
-        {
-            "Address": "http://127.0.0.1:2375",
-            "Metadata": {
-                "LastSuccess": "2015-02-05T11:46:42Z",
                 "pool": "foobar"
             },
             "Status": "ready"
@@ -154,12 +139,18 @@ class TsuruPoolTestCase(unittest.TestCase):
     ]
 }
         '''
+        docker_nodes_null = u'''
+{
+    "machines": null,
+    "nodes": null
+}
+        '''
         self.urlopen_mock.side_effect = [FakeURLopenResponse(docker_nodes_json),
-                                         FakeURLopenResponse(docker_nodes_null_machines)]
+                                         FakeURLopenResponse(docker_nodes_null)]
         pool_handler = plugin.TsuruPool("foobar")
-        self.assertListEqual(pool_handler.get_nodes(), ['10.10.34.221',
-                                                        'http://10.23.26.76:4243'])
-        self.assertListEqual(pool_handler.get_nodes(), ['http://127.0.0.1:2375'])
+        self.assertListEqual(pool_handler.get_nodes(), ['http://10.23.26.76:4243',
+                                                        'http://10.25.23.138:4243'])
+        self.assertListEqual(pool_handler.get_nodes(), [])
 
     def test_create_new_node(self):
         self.urlopen_mock.return_value = FakeURLopenResponse(None, 200)
