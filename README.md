@@ -9,9 +9,9 @@ You will need just admin permission in tsuru.
 
 As easy as any other tsuru plugin (use the same command to upgrade)
 ```bash
-$ tsuru plugin-install admtools https://raw.githubusercontent.com/tsuru/pool_recycle/master/pool_recycle/plugin.py
-$ tsuru pool_recycle -h 
-usage: pool_recycle [-h] -p POOL [-r DESTROY_NODE] [-d] [-P DOCKER_PORT]
+$ tsuru plugin-install admtools https://raw.githubusercontent.com/tsuru/pool-recycle/master/pool_recycle/plugin.py
+$ tsuru pool-recycle -h 
+usage: pool-recycle [-h] -p POOL [-r DESTROY_NODE] [-d] [-P DOCKER_PORT]
                     [-s DOCKER_SCHEME]
 
 Tsuru pool nodes recycle
@@ -34,7 +34,7 @@ optional arguments:
 ## Example (running with dry mode)
 
 ```bash
-$ tsuru pool_recycle -p theonepool -d
+$ tsuru pool-recycle -p theonepool -d
 Creating new node on pool "theonepool" using "templateA" template
 Removing node "http://127.0.0.1:2375" from pool "theonepool"
 Moving all containers on old node "http://127.0.0.1:2375" to new node
