@@ -240,15 +240,26 @@ def pool_recycle(pool_name, destroy_node=False, dry_mode=False, docker_port='424
                 template_idx = 0
             continue
         try:
+            sys.stdout.write('Creating new node on pool "{}" '
+                             'using {} template\n'.format(pool_name, pool_templates[template_idx]))
             new_node = pool_handler.create_new_node(pool_templates[template_idx])
+            sys.stdout.write('Removing node "{}" from pool "{}"\n'.format(node, pool_name))
             pool_handler.remove_node_from_tsuru(node)
+            sys.stdout.write('Moving all containers from old node "{}"'
+                             ' to new node "{}"\n'.format(node, new_node))
             pool_handler.move_node_containers(node, new_node)
             template_idx += 1
             if template_idx >= templates_len:
                 template_idx = 0
-        except (MoveNodeContainersError, RemoveNodeFromPoolError):
+        except (MoveNodeContainersError, RemoveNodeFromPoolError), e:
             ''' Try to re-insert node on pool '''
             pool_handler.add_node_to_pool(node, docker_port, docker_scheme)
+            sys.stderr.write('Error: {}\n'.format(e.message))
+            sys.exit(1)
+        except:
+            e = sys.exc_info()[0]
+            sys.stderr.write('Error: {}\n'.format(e))
+            sys.exit(1)
 
 
 def pool_recycle_parser(args):

@@ -10,10 +10,42 @@ import json
 from io import StringIO
 from mock import patch, Mock, call
 from pool_recycle import plugin
-from pool_recycle.plugin import MoveNodeContainersError
+from pool_recycle.plugin import MoveNodeContainersError, RemoveNodeFromPoolError
 
 
-class MockResponse(StringIO):
+class FakeTsuruPool(object):
+
+    def __init__(self, pool, move_node_containers_error=False, remove_node_from_tsuru_error=False):
+        self.pool = pool
+        self.nodes = ['127.0.0.1', 'http://10.10.1.1:2222', '10.1.1.1']
+        self.new_nodes = ['1.2.3.4', '5.6.7.8', '9.10.11.12']
+        self.move_node_containers_error = move_node_containers_error
+        self.remove_node_from_tsuru_error = remove_node_from_tsuru_error
+
+    def get_machines_templates(self):
+        return ['templateA', 'templateB']
+
+    def get_nodes(self):
+        return self.nodes
+
+    def remove_node_from_tsuru(self, node):
+        if self.remove_node_from_tsuru_error:
+            raise RemoveNodeFromPoolError("error on node {}".format(node))
+        return True
+
+    def move_node_containers(self, node, new_node):
+        if self.move_node_containers_error:
+            raise MoveNodeContainersError("error moving {} to {}".format(node, new_node))
+        return True
+
+    def create_new_node(self, template):
+        return self.new_nodes.pop(0)
+
+    def add_node_to_pool(self, node_url, docker_port, docker_scheme):
+        return True
+
+
+class FakeURLopenResponse(StringIO):
 
     def __init__(self, *args):
         try:
@@ -122,15 +154,15 @@ class TsuruPoolTestCase(unittest.TestCase):
     ]
 }
         '''
-        self.urlopen_mock.side_effect = [MockResponse(docker_nodes_json),
-                                         MockResponse(docker_nodes_null_machines)]
+        self.urlopen_mock.side_effect = [FakeURLopenResponse(docker_nodes_json),
+                                         FakeURLopenResponse(docker_nodes_null_machines)]
         pool_handler = plugin.TsuruPool("foobar")
         self.assertListEqual(pool_handler.get_nodes(), ['10.10.34.221',
                                                         'http://10.23.26.76:4243'])
         self.assertListEqual(pool_handler.get_nodes(), ['http://127.0.0.1:2375'])
 
     def test_create_new_node(self):
-        self.urlopen_mock.return_value = MockResponse(None, 200)
+        self.urlopen_mock.return_value = FakeURLopenResponse(None, 200)
         pool_handler = plugin.TsuruPool("foobar")
         pool_handler.get_nodes = Mock()
         pool_handler.get_nodes.side_effect = [['192.168.1.1', 'http://10.1.1.1:2723',
@@ -220,8 +252,8 @@ class TsuruPoolTestCase(unittest.TestCase):
     }
 ]
         '''
-        self.urlopen_mock.side_effect = [MockResponse(machines_templates_json, 200),
-                                         MockResponse(None, 500)]
+        self.urlopen_mock.side_effect = [FakeURLopenResponse(machines_templates_json, 200),
+                                         FakeURLopenResponse(None, 500)]
         pool_handler = plugin.TsuruPool("foobar")
         self.assertListEqual(pool_handler.get_machines_templates(),
                              ['template_red', 'template_yellow'])
@@ -230,7 +262,7 @@ class TsuruPoolTestCase(unittest.TestCase):
 
     def test_remove_node_from_tsuru(self):
         http_error = urllib2.HTTPError(None, 500, None, None, StringIO(u"No such node in storage"))
-        self.urlopen_mock.side_effect = [MockResponse(None, 200), http_error]
+        self.urlopen_mock.side_effect = [FakeURLopenResponse(None, 200), http_error]
         pool_handler = plugin.TsuruPool("foobar")
         return_remove_node = pool_handler.remove_node_from_tsuru('http://127.0.0.1:4243')
         self.assertEqual(return_remove_node, True)
@@ -252,9 +284,9 @@ class TsuruPoolTestCase(unittest.TestCase):
 
         fake_empty_buffer = u''
 
-        self.urlopen_mock.side_effect = [MockResponse(fake_buffer_error, 200),
-                                         MockResponse(fake_buffer_successfully, 200),
-                                         MockResponse(fake_empty_buffer, 200)]
+        self.urlopen_mock.side_effect = [FakeURLopenResponse(fake_buffer_error, 200),
+                                         FakeURLopenResponse(fake_buffer_successfully, 200),
+                                         FakeURLopenResponse(fake_empty_buffer, 200)]
 
         pool_handler = plugin.TsuruPool("foobar")
         move_return_value = pool_handler.move_node_containers('http://10.10.1.2:123',
@@ -300,6 +332,36 @@ class TsuruPoolTestCase(unittest.TestCase):
                             call('Moving all containers on old node "http://2.3.2.1:2123" to new node\n\n')]
 
         self.assertEqual(stdout.write.call_args_list, call_stdout_list)
+
+    @patch("sys.stdout")
+    @patch('pool_recycle.plugin.TsuruPool')
+    def test_pool_recycle_success(self, tsuru_pool_mock, stdout):
+        tsuru_pool_mock.return_value = FakeTsuruPool('foobar')
+        plugin.pool_recycle('foobar')
+        call_stdout_list = [call('Creating new node on pool "foobar" using templateA template\n'),
+                            call('Removing node "127.0.0.1" from pool "foobar"\n'),
+                            call('Moving all containers from old node "127.0.0.1" to new node "1.2.3.4"\n'),
+                            call('Creating new node on pool "foobar" using templateB template\n'),
+                            call('Removing node "http://10.10.1.1:2222" from pool "foobar"\n'),
+                            call('Moving all containers from old node "http://10.10.1.1:2222" '
+                                 'to new node "5.6.7.8"\n'),
+                            call('Creating new node on pool "foobar" using templateA template\n'),
+                            call('Removing node "10.1.1.1" from pool "foobar"\n'),
+                            call('Moving all containers from old node "10.1.1.1" to new node "9.10.11.12"\n')]
+        stdout.write.assert_has_calls(call_stdout_list)
+
+    @patch('sys.stderr')
+    @patch('sys.stdout')
+    @patch('pool_recycle.plugin.TsuruPool')
+    def test_pool_recycle_error_on_moving_containers(self, tsuru_pool_mock, stdout, stderr):
+        tsuru_pool_mock.return_value = FakeTsuruPool('foobar', True)
+        with self.assertRaises(SystemExit):
+            plugin.pool_recycle('foobar')
+        call_stdout_list = [call('Creating new node on pool "foobar" using templateA template\n'),
+                            call('Removing node "127.0.0.1" from pool "foobar"\n'),
+                            call('Moving all containers from old node "127.0.0.1" to new node "1.2.3.4"\n')]
+        stdout.write.assert_has_calls(call_stdout_list)
+        stderr.write.assert_called_once_with('Error: error moving 127.0.0.1 to 1.2.3.4\n')
 
     def tearDown(self):
         self.patcher.stop()
