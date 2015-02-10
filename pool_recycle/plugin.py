@@ -141,33 +141,30 @@ class TsuruPool(object):
                                                 'to': node_to})
         if return_code not in [200, 201, 204]:
             raise MoveNodeContainersError(move_progress)
-            return False
 
         moving_error = False
-        retry_move = False
+        no_data = True
         for move_msg in self.json_parser(move_progress):
+            no_data = False
             if 'Error' in move_msg['Message']:
                 moving_error = True
                 sys.stderr.write("{}\n".format(move_msg['Message']))
             else:
                 sys.stdout.write("{}\n".format(move_msg['Message']))
 
-            if 'cannot connect to Docker endpoint' in move_msg['Message']:
-                retry_move = True
-
-        if retry_move and cur_retry < max_retry:
+        if moving_error and cur_retry < max_retry:
             sys.stdout.write("Retrying move containers from {} to {}. "
                              "Waiting for {} seconds...".format(node, new_node, wait_timeout))
             time.sleep(wait_timeout)
-            return self.move_node_containers(node, new_node, cur_retry + 1)
-        elif cur_retry >= max_retry:
-            sys.stderr.write("Error: Max retry reached on {} attempts. "
-                             "Move node containers aborted on error moving "
-                             "from {} to {}".format(max_retry, node, new_node))
-            return False
-
-        if moving_error:
-            return False
+            self.move_node_containers(node, new_node, (cur_retry + 1), max_retry)
+            return True
+        elif moving_error and cur_retry >= max_retry:
+            sys.stderr.write("Error: Max retry reached for moving on {} attempts.".format(max_retry + 1))
+            raise MoveNodeContainersError("moving containers from {} to {} aborted on error."
+                                          .format(node, new_node))
+        if no_data:
+            raise MoveNodeContainersError("moving containers from {} to {} aborted on error."
+                                          .format(node, new_node))
         return True
 
     def __tsuru_request(self, method, path, body=None):
@@ -269,9 +266,8 @@ def pool_recycle(pool_name, destroy_node=False, dry_mode=False, docker_port='424
             pool_handler.add_node_to_pool(node, docker_port, docker_scheme)
             sys.stderr.write('Error: {}\n'.format(e.message))
             sys.exit(1)
-        except:
-            e = sys.exc_info()[0]
-            sys.stderr.write('Error: {}\n'.format(e))
+        except Exception, e:
+            sys.stderr.write('Error: {}\n'.format(e.message))
             sys.exit(1)
 
 

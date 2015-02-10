@@ -31,7 +31,6 @@ class FakeTsuruPool(object):
     def remove_node_from_tsuru(self, node):
         if self.remove_node_from_tsuru_error:
             raise RemoveNodeFromPoolError("error on node {}".format(node))
-        return True
 
     def move_node_containers(self, node, new_node):
         if self.move_node_containers_error:
@@ -256,36 +255,36 @@ class TsuruPoolTestCase(unittest.TestCase):
                                 pool_handler.remove_node_from_tsuru,
                                 'http://127.0.0.1:4243')
 
+    @patch("time.sleep")
     @patch("sys.stderr")
     @patch("sys.stdout")
-    def test_move_node_containers(self, stdout, stderr):
-        fake_buffer_error = ['garbage in first chunk\ {"Message":"Moving 2 units..."}\n'
-                             '{"Message":"Error moving unit: abcd1234"}\n',
-                             '{"Message":"Error moving unit: xyzabcd234"}\n']
-        fake_buffer_error = "".join([x for x in fake_buffer_error])
+    def test_move_node_containers_success(self, stdout, stderr, sleep):
+        fake_buffer = ['garbage in first chunk\ {"Message":"Moving 2 units..."}\n'
+                       '{"Message":"moving unit: abcd1234"}\n',
+                       '{"Message":"moving unit: xyzabcd234"}\n',
+                       '{ "Message":"Container moved successfully" }']
 
-        fake_buffer_successfully = '{ "Message":"Container moved successfully" }'
+        fake_buffer = "".join([x for x in fake_buffer])
 
-        fake_empty_buffer = ' '
-
-        self.urlopen_mock.side_effect = [FakeURLopenResponse(fake_buffer_error, 200),
-                                         FakeURLopenResponse(fake_buffer_successfully, 200),
-                                         FakeURLopenResponse(fake_empty_buffer, 200)]
+        self.urlopen_mock.return_value = FakeURLopenResponse(fake_buffer, 200)
 
         pool_handler = plugin.TsuruPool("foobar")
 
+        stdout_calls = [call('Moving 2 units...\n'),
+                        call('moving unit: abcd1234\n'),
+                        call('moving unit: xyzabcd234\n'),
+                        call('Container moved successfully\n')]
+
         move_return_value = pool_handler.move_node_containers('http://10.10.1.2:123', 'https://1.2.3.4')
-        stdout.write.assert_called_with("Moving 2 units...\n")
-        stderr.write.assert_has_call("Error moving unit: abcd1234\n")
-        stderr.write.assert_has_call("Error moving unit: xyzabcd234\n")
-        self.assertEqual(move_return_value, False)
+        self.assertEqual(stdout.write.call_args_list, stdout_calls)
+        self.assertEqual(move_return_value, True)
+        sleep.assert_has_calls([])
 
-        move_return_value_2 = pool_handler.move_node_containers('http://10.1.1.2:123', '1.2.3.7')
-        stdout.write.assert_called_with("{}\n".format(json.loads(fake_buffer_successfully)['Message']))
-        self.assertEqual(move_return_value_2, True)
-
-        move_return_value_3 = pool_handler.move_node_containers('http://10.10.1.2:123', 'http://1.2.3.4:432')
-        self.assertEqual(move_return_value_3, True)
+    @patch("time.sleep")
+    @patch("sys.stderr")
+    @patch("sys.stdout")
+    def test_move_node_containers_invalid_host(self, stdout, stderr, sleep):
+        pool_handler = plugin.TsuruPool("foobar")
         self.assertRaisesRegexp(MoveNodeContainersError, 'node address .+ are invalids',
                                 pool_handler.move_node_containers,
                                 'http://10.10.1.2:123', '1.2.3.4:432')
@@ -293,8 +292,21 @@ class TsuruPoolTestCase(unittest.TestCase):
     @patch("time.sleep")
     @patch("sys.stderr")
     @patch("sys.stdout")
-    def test_move_node_containers_docker_connection_error(self, stdout, stderr, sleep):
-        fake_buffer_docker_connection_error = ['{"Message":"Moving 2 units..."}\n'
+    def test_move_node_containers_empty_return_stream(self, stdout, stderr, sleep):
+        fake_buffer = ''
+        self.urlopen_mock.return_value = FakeURLopenResponse(fake_buffer, 200)
+        with self.assertRaises(MoveNodeContainersError):
+            pool_handler = plugin.TsuruPool("foobar")
+            pool_handler.move_node_containers('http://10.10.1.2:123', 'https://1.2.3.4')
+        sleep.assert_has_calls([])
+        stdout.write.assert_has_calls([])
+        stderr.write.assert_has_calls([])
+
+    @patch("time.sleep")
+    @patch("sys.stderr")
+    @patch("sys.stdout")
+    def test_move_node_containers_success_after_errors(self, stdout, stderr, sleep):
+        fake_buffer_docker_connection_error = ['garbage in first chunk {"Message":"Moving 2 units..."}\n'
                                                '{"Message":"Error moving unit: abcd1234"}\n'
                                                '{"Message":"Error moving container: Error moving'
                                                ' unit: cannot connect to Docker endpoint"}\n'
@@ -315,7 +327,6 @@ class TsuruPoolTestCase(unittest.TestCase):
         self.urlopen_mock.side_effect = docker_connection_error
 
         pool_handler = plugin.TsuruPool("foobar")
-
         move_return_value = pool_handler.move_node_containers('http://1.2.3.4:123', 'http://5.6.7.8:234')
         self.assertEqual(move_return_value, True)
 
@@ -335,6 +346,57 @@ class TsuruPoolTestCase(unittest.TestCase):
                         call('Moving unit abcd1234\n'),
                         call('Moving unit xyzabc234\n'),
                         call('Container moved successfully\n')]
+
+        self.assertEqual(stdout.write.call_args_list, stdout_calls)
+        self.assertEqual(stderr.write.call_args_list, stderr_calls)
+        sleep.assert_has_calls([call(180), call(180)])
+
+    @patch("time.sleep")
+    @patch("sys.stderr")
+    @patch("sys.stdout")
+    def test_move_node_containers_fail(self, stdout, stderr, sleep):
+        fake_buffer_docker_connection_error = ['garbage in first chunk {"Message":"Moving 2 units..."}\n'
+                                               '{"Message":"Error moving unit: abcd1234"}\n'
+                                               '{"Message":"Error moving container: Error moving'
+                                               ' unit: cannot connect to Docker endpoint"}\n'
+                                               '{"Message":"Error moving unit: xyzabcd234"}\n',
+
+                                               '{"Message":"Moving 2 units..."}\n'
+                                               '{"Message":"Error moving unit: abcd1234"}\n'
+                                               '{"Message":"Error moving container: Error moving unit:'
+                                               ' cannot connect to Docker endpoint"}\n'
+                                               '{"Message":"Error moving unit: xyzabcd234"}\n',
+
+                                               '{"Message": "Moving unit abcd1234"}\n'
+                                               '{"Message": "Moving unit xyzabc234"}\n'
+                                               '{"Message": "Error moving unit: 0oi99222"}\n']
+
+        docker_connection_error = [FakeURLopenResponse(fake_buffer_docker_connection_error[0], 200),
+                                   FakeURLopenResponse(fake_buffer_docker_connection_error[1], 200),
+                                   FakeURLopenResponse(fake_buffer_docker_connection_error[2], 200)]
+
+        self.urlopen_mock.side_effect = docker_connection_error
+
+        with self.assertRaises(MoveNodeContainersError):
+            pool_handler = plugin.TsuruPool("foobar")
+            pool_handler.move_node_containers('http://1.2.3.4:123', 'http://5.6.7.8:234', 0, 2)
+
+        stderr_calls = []
+        for message_block in fake_buffer_docker_connection_error:
+            for line in message_block.split('\n'):
+                if line is not '' and 'Error' in line:
+                    message = json.loads(line)['Message']
+                    stderr_calls.append(call(str(message + '\n')))
+        stderr_calls.append(call('Error: Max retry reached for moving on 3 attempts.'))
+
+        stdout_calls = [call('Moving 2 units...\n'),
+                        call('Retrying move containers from http://1.2.3.4:123 to'
+                             ' http://5.6.7.8:234. Waiting for 180 seconds...'),
+                        call('Moving 2 units...\n'),
+                        call('Retrying move containers from http://1.2.3.4:123 to'
+                             ' http://5.6.7.8:234. Waiting for 180 seconds...'),
+                        call('Moving unit abcd1234\n'),
+                        call('Moving unit xyzabc234\n')]
 
         self.assertEqual(stdout.write.call_args_list, stdout_calls)
         self.assertEqual(stderr.write.call_args_list, stderr_calls)
