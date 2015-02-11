@@ -155,6 +155,7 @@ class TsuruPool(object):
         if moving_error and cur_retry < max_retry:
             sys.stdout.write("Retrying move containers from {} to {}. "
                              "Waiting for {} seconds...".format(node, new_node, wait_timeout))
+            sys.stdout.flush()
             time.sleep(wait_timeout)
             self.move_node_containers(node, new_node, (cur_retry + 1), max_retry)
             return True
@@ -231,7 +232,7 @@ class TsuruPool(object):
                     break
 
 
-def pool_recycle(pool_name, destroy_node=False, dry_mode=False, docker_port='4243',
+def pool_recycle(pool_name, destroy_node=False, dry_mode=False, max_retry=10, docker_port='4243',
                  docker_scheme='http'):
     pool_handler = TsuruPool(pool_name)
     pool_templates = pool_handler.get_machines_templates()
@@ -257,7 +258,7 @@ def pool_recycle(pool_name, destroy_node=False, dry_mode=False, docker_port='424
             pool_handler.remove_node_from_tsuru(node)
             sys.stdout.write('Moving all containers from old node "{}"'
                              ' to new node "{}"\n'.format(node, new_node))
-            pool_handler.move_node_containers(node, new_node)
+            pool_handler.move_node_containers(node, new_node, 0, max_retry)
             template_idx += 1
             if template_idx >= templates_len:
                 template_idx = 0
@@ -279,6 +280,8 @@ def pool_recycle_parser(args):
                         help="Destroy olds docker nodes after recycle")
     parser.add_argument("-d", "--dry-run", required=False, action='store_true',
                         help="Dry run all recycle actions")
+    parser.add_argument("-m", "--max_retry", required=False, default=10, type=int,
+                        help="Max retries attempts to move a node on failure")
     parser.add_argument("-P", "--docker-port", required=False, default='4243',
                         help="Docker port - if something goes wrong, "
                              "node will be re-add using it as docker port "
@@ -289,7 +292,7 @@ def pool_recycle_parser(args):
                         "(only when using IaaS)")
     parsed = parser.parse_args(args)
     pool_recycle(parsed.pool, parsed.destroy_node, parsed.dry_run,
-                 parsed.docker_port, parsed.docker_scheme)
+                 parsed.max_retry, parsed.docker_port, parsed.docker_scheme)
 
 
 def main(args=None):
