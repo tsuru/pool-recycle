@@ -281,6 +281,8 @@ def pool_recycle(pool_name, destroy_node=False, dry_mode=False, max_retry=10, do
             template_idx += 1
             if template_idx >= templates_len:
                 template_idx = 0
+            if destroy_node:
+                sys.stdout.write('Machine {} removed from IaaS\n'.format(node))
             continue
         try:
             sys.stdout.write('Creating new node on pool "{}" '
