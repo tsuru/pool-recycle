@@ -53,6 +53,18 @@ class RemoveNodeFromPoolError(Exception):
         return unicode(str(self))
 
 
+class RemoveMachineFromIaaSError(Exception):
+    def __init__(self, name):
+        super(Exception, self).__init__(name)
+        self.name = name
+
+    def __str__(self):
+        return 'Error removing machine from IaaS: "{}"'.format(self.name)
+
+    def __unicode__(self):
+        return unicode(str(self))
+
+
 class TsuruPool(object):
 
     def __init__(self, pool):
@@ -66,8 +78,7 @@ class TsuruPool(object):
     def get_nodes(self):
         return_code, docker_nodes = self.__tsuru_request("GET", "/docker/node")
         if return_code not in [200, 201, 204]:
-            raise Exception('Error get nodes from '
-                            'tsuru: "{}"'.format(docker_nodes))
+            raise Exception('Error get nodes from tsuru: "{}"'.format(docker_nodes))
         docker_nodes = json.loads(docker_nodes.read())
         pool_nodes = []
         if 'nodes' in docker_nodes and docker_nodes['nodes'] is not None:
@@ -76,6 +87,19 @@ class TsuruPool(object):
                    node['Metadata']['pool'] == self.pool):
                     pool_nodes.append(node['Address'])
         return pool_nodes
+
+    def get_machine_id_from_iaas(self, node):
+        node_hostname = self.get_address(node)
+        return_code, iaas_machines = self.__tsuru_request("GET", "GET /iaas/machines")
+        if return_code not in [200, 201, 204]:
+            raise Exception('Error get iaas machines from tsuru: "{}"'.format(iaas_machines))
+        for machine in json.load(iaas_machines):
+            try:
+                if machine['Address'] == node_hostname:
+                    return machine['Id']
+            except:
+                pass
+        return None
 
     def add_node_to_pool(self, node_url, docker_port, docker_scheme):
         if not (re.match(r'^https?://', node_url)):
@@ -117,14 +141,22 @@ class TsuruPool(object):
                     iaas_templates.append(template['Name'])
         return iaas_templates
 
-    def remove_node_from_tsuru(self, node, destroy_node=False):
+    def remove_node_from_pool(self, node):
         headers = {'address': node}
-        if destroy_node:
-            headers['remove_iaas'] = "true"
         return_code, msg = self.__tsuru_request("DELETE", "/docker/node",
                                                 headers)
         if return_code not in [200, 201, 204]:
             raise RemoveNodeFromPoolError(msg)
+        return True
+
+    def remove_machine_from_iaas(self, node):
+        machine_id = self.get_machine_id_from_iaas(node)
+        if machine_id is None:
+            raise RemoveMachineFromIaaSError("machine {} not found on IaaS".format(node))
+        return_code, msg = self.__tsuru_request("DELETE", "/iaas/machines/{}".format(machine_id))
+
+        if return_code not in [200, 201, 204]:
+            raise RemoveMachineFromIaaSError(msg)
         return True
 
     def move_node_containers(self, node, new_node, cur_retry=0, max_retry=10, wait_timeout=180):
@@ -255,13 +287,16 @@ def pool_recycle(pool_name, destroy_node=False, dry_mode=False, max_retry=10, do
                              'using {} template\n'.format(pool_name, pool_templates[template_idx]))
             new_node = pool_handler.create_new_node(pool_templates[template_idx])
             sys.stdout.write('Removing node "{}" from pool "{}"\n'.format(node, pool_name))
-            pool_handler.remove_node_from_tsuru(node)
+            pool_handler.remove_node_from_pool(node)
             sys.stdout.write('Moving all containers from old node "{}"'
                              ' to new node "{}"\n'.format(node, new_node))
             pool_handler.move_node_containers(node, new_node, 0, max_retry)
             template_idx += 1
             if template_idx >= templates_len:
                 template_idx = 0
+            if destroy_node:
+                pool_handler.remove_machine_from_iaas(node)
+                sys.stdout.write('Machine {} removed from IaaS\n'.format(node))
         except (MoveNodeContainersError, RemoveNodeFromPoolError), e:
             ''' Try to re-insert node on pool '''
             pool_handler.add_node_to_pool(node, docker_port, docker_scheme)
@@ -276,7 +311,7 @@ def pool_recycle_parser(args):
     parser = argparse.ArgumentParser(description="Tsuru pool nodes recycle")
     parser.add_argument("-p", "--pool", required=True,
                         help="Docker tsuru pool")
-    parser.add_argument("-r", "--destroy-node", required=False,
+    parser.add_argument("-r", "--destroy-node", required=False, action='store_true',
                         help="Destroy olds docker nodes after recycle")
     parser.add_argument("-d", "--dry-run", required=False, action='store_true',
                         help="Dry run all recycle actions")
