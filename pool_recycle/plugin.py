@@ -90,7 +90,7 @@ class TsuruPool(object):
 
     def get_machine_id_from_iaas(self, node):
         node_hostname = self.get_address(node)
-        return_code, iaas_machines = self.__tsuru_request("GET", "GET /iaas/machines")
+        return_code, iaas_machines = self.__tsuru_request("GET", "/iaas/machines")
         if return_code not in [200, 201, 204]:
             raise Exception('Error get iaas machines from tsuru: "{}"'.format(iaas_machines))
         for machine in json.load(iaas_machines):
