@@ -277,12 +277,13 @@ def pool_recycle(pool_name, destroy_node=False, dry_mode=False, max_retry=10, do
             sys.stdout.write('Creating new node on pool "{}" using "{}" '
                              'template\n'.format(pool_name, pool_templates[template_idx]))
             sys.stdout.write('Removing node "{}" from pool "{}"\n'.format(node, pool_name))
-            sys.stdout.write('Moving all containers on old node "{}" to new node\n\n'.format(node))
+            sys.stdout.write('Moving all containers on old node "{}" to new node\n'.format(node))
             template_idx += 1
             if template_idx >= templates_len:
                 template_idx = 0
             if destroy_node:
                 sys.stdout.write('Machine {} removed from IaaS\n'.format(node))
+            sys.stdout.write('\n')
             continue
         try:
             sys.stdout.write('Creating new node on pool "{}" '

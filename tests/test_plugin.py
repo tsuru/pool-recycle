@@ -459,16 +459,20 @@ class TsuruPoolTestCase(unittest.TestCase):
         plugin.pool_recycle('foobar', False, True)
         call_stdout_list = [call('Creating new node on pool "foobar" using "templateA" template\n'),
                             call('Removing node "http://127.0.0.1:4243" from pool "foobar"\n'),
-                            call('Moving all containers on old node "http://127.0.0.1:4243" to new node\n\n'),
+                            call('Moving all containers on old node "http://127.0.0.1:4243" to new node\n'),
+                            call('\n'),
                             call('Creating new node on pool "foobar" using "templateB" template\n'),
                             call('Removing node "10.10.2.2" from pool "foobar"\n'),
-                            call('Moving all containers on old node "10.10.2.2" to new node\n\n'),
+                            call('Moving all containers on old node "10.10.2.2" to new node\n'),
+                            call('\n'),
                             call('Creating new node on pool "foobar" using "templateC" template\n'),
                             call('Removing node "10.2.3.2" from pool "foobar"\n'),
-                            call('Moving all containers on old node "10.2.3.2" to new node\n\n'),
+                            call('Moving all containers on old node "10.2.3.2" to new node\n'),
+                            call('\n'),
                             call('Creating new node on pool "foobar" using "templateA" template\n'),
                             call('Removing node "http://2.3.2.1:2123" from pool "foobar"\n'),
-                            call('Moving all containers on old node "http://2.3.2.1:2123" to new node\n\n')]
+                            call('Moving all containers on old node "http://2.3.2.1:2123" to new node\n'),
+                            call('\n')]
 
         self.assertEqual(stdout.write.call_args_list, call_stdout_list)
 
