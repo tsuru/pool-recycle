@@ -320,7 +320,7 @@ def pool_recycle_parser(args):
                         help="Dry run all recycle actions")
     parser.add_argument("-m", "--max_retry", required=False, default=10, type=int,
                         help="Max retries attempts to move a node on failure")
-    parser.add_argument("t", "--timeout", require=False, default=180, type=int,
+    parser.add_argument("-t", "--timeout", required=False, default=180, type=int,
                         help="Max timeout between moves on failures attempts")
     parser.add_argument("-P", "--docker-port", required=False, default='4243',
                         help="Docker port - if something goes wrong, "

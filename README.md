@@ -20,9 +20,12 @@ Tsuru pool nodes recycle
 optional arguments:
   -h, --help            show this help message and exit
   -p POOL, --pool POOL  Docker tsuru pool
-  -r DESTROY_NODE, --destroy-node DESTROY_NODE
-                        Destroy olds docker nodes after recycle
+  -r, --destroy-node    Destroy olds docker nodes after recycle
   -d, --dry-run         Dry run all recycle actions
+  -m MAX_RETRY, --max_retry MAX_RETRY
+                        Max retries attempts to move a node on failure
+  -t TIMEOUT, --timeout TIMEOUT
+                        Max timeout between moves on failures attempts
   -P DOCKER_PORT, --docker-port DOCKER_PORT
                         Docker port - if something goes wrong, node will be
                         re-add using it as docker port (only when using IaaS)
