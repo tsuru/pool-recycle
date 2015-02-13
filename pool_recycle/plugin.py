@@ -189,7 +189,7 @@ class TsuruPool(object):
                              "Waiting for {} seconds...".format(node, new_node, wait_timeout))
             sys.stdout.flush()
             time.sleep(wait_timeout)
-            self.move_node_containers(node, new_node, (cur_retry + 1), max_retry)
+            self.move_node_containers(node, new_node, (cur_retry + 1), max_retry, wait_timeout)
             return True
         elif moving_error and cur_retry >= max_retry:
             sys.stderr.write("Error: Max retry reached for moving on {} attempts.".format(max_retry + 1))
@@ -264,8 +264,8 @@ class TsuruPool(object):
                     break
 
 
-def pool_recycle(pool_name, destroy_node=False, dry_mode=False, max_retry=10, docker_port='4243',
-                 docker_scheme='http'):
+def pool_recycle(pool_name, destroy_node=False, dry_mode=False, max_retry=10, wait_timeout=180,
+                 docker_port='4243', docker_scheme='http'):
     pool_handler = TsuruPool(pool_name)
     pool_templates = pool_handler.get_machines_templates()
     if pool_templates == []:
@@ -293,7 +293,7 @@ def pool_recycle(pool_name, destroy_node=False, dry_mode=False, max_retry=10, do
             pool_handler.remove_node_from_pool(node)
             sys.stdout.write('Moving all containers from old node "{}"'
                              ' to new node "{}"\n'.format(node, new_node))
-            pool_handler.move_node_containers(node, new_node, 0, max_retry)
+            pool_handler.move_node_containers(node, new_node, 0, max_retry, wait_timeout)
             template_idx += 1
             if template_idx >= templates_len:
                 template_idx = 0
@@ -320,6 +320,8 @@ def pool_recycle_parser(args):
                         help="Dry run all recycle actions")
     parser.add_argument("-m", "--max_retry", required=False, default=10, type=int,
                         help="Max retries attempts to move a node on failure")
+    parser.add_argument("t", "--timeout", require=False, default=180, type=int,
+                        help="Max timeout between moves on failures attempts")
     parser.add_argument("-P", "--docker-port", required=False, default='4243',
                         help="Docker port - if something goes wrong, "
                              "node will be re-add using it as docker port "
@@ -330,7 +332,7 @@ def pool_recycle_parser(args):
                         "(only when using IaaS)")
     parsed = parser.parse_args(args)
     pool_recycle(parsed.pool, parsed.destroy_node, parsed.dry_run,
-                 parsed.max_retry, parsed.docker_port, parsed.docker_scheme)
+                 parsed.max_retry, parsed.timeout, parsed.docker_port, parsed.docker_scheme)
 
 
 def main(args=None):

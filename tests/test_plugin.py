@@ -34,7 +34,7 @@ class FakeTsuruPool(object):
         if self.remove_node_from_pool_error:
             raise RemoveNodeFromPoolError("error on node {}".format(node))
 
-    def move_node_containers(self, node, new_node, cur_retry, max_retry):
+    def move_node_containers(self, node, new_node, cur_retry, max_retry, wait_timeout):
         if self.move_node_containers_error:
             raise MoveNodeContainersError("error moving {} to {}".format(node, new_node))
         return True
