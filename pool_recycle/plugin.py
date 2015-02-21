@@ -265,14 +265,33 @@ class TsuruPool(object):
 
 
 def pool_recycle(pool_name, destroy_node=False, dry_mode=False, max_retry=10, wait_timeout=180,
-                 docker_port='4243', docker_scheme='http'):
+                 docker_port='4243', docker_scheme='http', pre_provision=False):
     pool_handler = TsuruPool(pool_name)
     pool_templates = pool_handler.get_machines_templates()
     if pool_templates == []:
         raise Exception('Pool "{}" does not contain any template associate'.format(pool_name))
     templates_len = len(pool_templates)
     template_idx = 0
-    for node in pool_handler.get_nodes():
+    nodes_to_recycle = pool_handler.get_nodes()
+
+    pre_provision_nodes = []
+    if pre_provision:
+        try:
+            for _ in xrange(len(nodes_to_recycle)):
+                sys.stdout.write('Creating new node on pool "{}" '
+                                 'using {} template\n'.format(pool_name, pool_templates[template_idx]))
+                new_node = pool_handler.create_new_node(pool_templates[template_idx])
+                pre_provision_nodes.append(new_node)
+                template_idx += 1
+                if template_idx >= templates_len:
+                    template_idx = 0
+        except Exception, e:
+            for node in pre_provision_nodes:
+                pool_handler.remove_machine_from_iaas(node)
+            raise (e)
+
+    new_node = None
+    for node in nodes_to_recycle:
         if dry_mode:
             sys.stdout.write('Creating new node on pool "{}" using "{}" '
                              'template\n'.format(pool_name, pool_templates[template_idx]))
@@ -286,9 +305,13 @@ def pool_recycle(pool_name, destroy_node=False, dry_mode=False, max_retry=10, wa
             sys.stdout.write('\n')
             continue
         try:
-            sys.stdout.write('Creating new node on pool "{}" '
-                             'using {} template\n'.format(pool_name, pool_templates[template_idx]))
-            new_node = pool_handler.create_new_node(pool_templates[template_idx])
+            if pre_provision:
+                new_node = pre_provision_nodes.pop()
+                sys.stdout.write('Using {} node as destination node\n'.format(new_node))
+            else:
+                sys.stdout.write('Creating new node on pool "{}" '
+                                 'using {} template\n'.format(pool_name, pool_templates[template_idx]))
+                new_node = pool_handler.create_new_node(pool_templates[template_idx])
             sys.stdout.write('Removing node "{}" from pool "{}"\n'.format(node, pool_name))
             pool_handler.remove_node_from_pool(node)
             sys.stdout.write('Moving all containers from old node "{}"'
@@ -300,7 +323,8 @@ def pool_recycle(pool_name, destroy_node=False, dry_mode=False, max_retry=10, wa
             if destroy_node:
                 pool_handler.remove_machine_from_iaas(node)
                 sys.stdout.write('Machine {} removed from IaaS\n'.format(node))
-        except (MoveNodeContainersError, RemoveNodeFromPoolError), e:
+            new_node = None
+        except (MoveNodeContainersError, RemoveNodeFromPoolError, KeyboardInterrupt), e:
             ''' Try to re-insert node on pool '''
             pool_handler.add_node_to_pool(node, docker_port, docker_scheme)
             sys.stderr.write('Error: {}\n'.format(e.message))
@@ -308,6 +332,11 @@ def pool_recycle(pool_name, destroy_node=False, dry_mode=False, max_retry=10, wa
         except Exception, e:
             sys.stderr.write('Error: {}\n'.format(e.message))
             sys.exit(1)
+        finally:
+            if new_node is not None:
+                pool_handler.remove_machine_from_iaas(new_node)
+            for node in pre_provision_nodes:
+                pool_handler.remove_machine_from_iaas(node)
 
 
 def pool_recycle_parser(args):
@@ -330,9 +359,12 @@ def pool_recycle_parser(args):
                         default='http', help="Docker scheme - if something goes "
                         "wrong, node will be re-add using it as docker scheme "
                         "(only when using IaaS)")
+    parser.add_argument("--pre_provision", required=False, action='store_true',
+                        help="Pre-provision all nodes on IaaS before start moving")
     parsed = parser.parse_args(args)
     pool_recycle(parsed.pool, parsed.destroy_node, parsed.dry_run,
-                 parsed.max_retry, parsed.timeout, parsed.docker_port, parsed.docker_scheme)
+                 parsed.max_retry, parsed.timeout, parsed.docker_port, parsed.docker_scheme,
+                 parsed.pre_provision)
 
 
 def main(args=None):
