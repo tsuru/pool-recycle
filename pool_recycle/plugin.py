@@ -88,7 +88,7 @@ class TsuruPool(object):
                     pool_nodes.append(node['Address'])
         return pool_nodes
 
-    def get_machine_id_from_iaas(self, node):
+    def get_machine_metadata_from_iaas(self, node):
         node_hostname = self.get_address(node)
         return_code, iaas_machines = self.__tsuru_request("GET", "/iaas/machines")
         if return_code not in [200, 201, 204]:
@@ -96,17 +96,17 @@ class TsuruPool(object):
         for machine in json.load(iaas_machines):
             try:
                 if machine['Address'] == node_hostname:
-                    return machine['Id']
+                    return {'id': machine['Id'], 'metadata': machine['CreationParams']}
             except:
                 pass
         return None
 
-    def add_node_to_pool(self, node_url, docker_port, docker_scheme):
+    def add_node_to_pool(self, node_url, docker_port, docker_scheme, params={}):
         if not (re.match(r'^https?://', node_url)):
             node_url = '{}://{}:{}'.format(docker_scheme, node_url, docker_port)
         (return_code,
          msg) = self.__tsuru_request("POST", "/docker/node?register=false",
-                                             {"address": node_url, "pool": self.pool})
+                                             dict({"address": node_url, "pool": self.pool}, **params))
         if return_code not in [200, 201, 204]:
             raise NewNodeError(msg)
         return True
@@ -147,12 +147,14 @@ class TsuruPool(object):
                                                 headers)
         if return_code not in [200, 201, 204]:
             raise RemoveNodeFromPoolError(msg)
+
         return True
 
     def remove_machine_from_iaas(self, node):
-        machine_id = self.get_machine_id_from_iaas(node)
-        if machine_id is None:
+        machine_metadata = self.get_machine_metadata_from_iaas(node)
+        if machine_metadata is None:
             raise RemoveMachineFromIaaSError("machine {} not found on IaaS".format(node))
+        machine_id = machine_metadata['id']
         return_code, msg = self.__tsuru_request("DELETE", "/iaas/machines/{}".format(machine_id))
 
         if return_code not in [200, 201, 204]:
@@ -275,12 +277,13 @@ def pool_recycle(pool_name, destroy_node=False, dry_mode=False, max_retry=10, wa
     nodes_to_recycle = pool_handler.get_nodes()
 
     pre_provision_nodes = []
-    if pre_provision:
+    if pre_provision and not dry_mode:
         try:
             for _ in xrange(len(nodes_to_recycle)):
                 sys.stdout.write('Creating new node on pool "{}" '
                                  'using {} template\n'.format(pool_name, pool_templates[template_idx]))
                 new_node = pool_handler.create_new_node(pool_templates[template_idx])
+                pool_handler.remove_node_from_pool(new_node)
                 pre_provision_nodes.append(new_node)
                 template_idx += 1
                 if template_idx >= templates_len:
@@ -288,7 +291,7 @@ def pool_recycle(pool_name, destroy_node=False, dry_mode=False, max_retry=10, wa
         except Exception, e:
             for node in pre_provision_nodes:
                 pool_handler.remove_machine_from_iaas(node)
-            raise (e)
+            raise e
 
     new_node = None
     for node in nodes_to_recycle:
@@ -314,6 +317,9 @@ def pool_recycle(pool_name, destroy_node=False, dry_mode=False, max_retry=10, wa
                 new_node = pool_handler.create_new_node(pool_templates[template_idx])
             sys.stdout.write('Removing node "{}" from pool "{}"\n'.format(node, pool_name))
             pool_handler.remove_node_from_pool(node)
+            if pre_provision:
+                node_params = pool_handler.get_machine_metadata_from_iaas(node)
+                pool_handler.add_node_to_pool(node, docker_port, docker_scheme, node_params)
             sys.stdout.write('Moving all containers from old node "{}"'
                              ' to new node "{}"\n'.format(node, new_node))
             pool_handler.move_node_containers(node, new_node, 0, max_retry, wait_timeout)
@@ -326,17 +332,15 @@ def pool_recycle(pool_name, destroy_node=False, dry_mode=False, max_retry=10, wa
             new_node = None
         except (MoveNodeContainersError, RemoveNodeFromPoolError, KeyboardInterrupt), e:
             ''' Try to re-insert node on pool '''
-            pool_handler.add_node_to_pool(node, docker_port, docker_scheme)
-            sys.stderr.write('Error: {}\n'.format(e.message))
-            sys.exit(1)
+            node_params = pool_handler.get_machine_metadata_from_iaas(node)
+            pool_handler.add_node_to_pool(node, docker_port, docker_scheme, node_params)
+            raise e
         except Exception, e:
-            sys.stderr.write('Error: {}\n'.format(e.message))
-            sys.exit(1)
+            raise e
         finally:
-            if new_node is not None:
-                pool_handler.remove_machine_from_iaas(new_node)
-            for node in pre_provision_nodes:
-                pool_handler.remove_machine_from_iaas(node)
+            if not dry_mode:
+                for node in pre_provision_nodes:
+                    pool_handler.remove_machine_from_iaas(node)
 
 
 def pool_recycle_parser(args):
