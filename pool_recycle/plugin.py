@@ -104,9 +104,12 @@ class TsuruPool(object):
     def add_node_to_pool(self, node_url, docker_port, docker_scheme, params={}):
         if not (re.match(r'^https?://', node_url)):
             node_url = '{}://{}:{}'.format(docker_scheme, node_url, docker_port)
+        try:
+            post_data = dict({"address": node_url, "pool": self.pool}, **params)
+        except TypeError:
+            post_data = {"address": node_url, "pool": self.pool}
         (return_code,
-         msg) = self.__tsuru_request("POST", "/docker/node?register=false",
-                                             dict({"address": node_url, "pool": self.pool}, **params))
+         msg) = self.__tsuru_request("POST", "/docker/node?register=true", post_data)
         if return_code not in [200, 201, 204]:
             raise NewNodeError(msg)
         return True

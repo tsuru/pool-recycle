@@ -197,7 +197,16 @@ class TsuruPoolTestCase(unittest.TestCase):
         extra_params = {'blah': 'bleh', 'foo': 'bar'}
         pool_handler.add_node_to_pool('127.0.0.1', '4243', 'http', extra_params)
         node_add_dict = dict({'address': 'http://127.0.0.1:4243', 'pool': 'foobar'}, **extra_params)
-        mocked_tsuru_request.assert_called_once_with("POST", "/docker/node?register=false",
+        mocked_tsuru_request.assert_called_once_with("POST", "/docker/node?register=true",
+                                                     node_add_dict)
+
+    @patch.object(plugin.TsuruPool, '_TsuruPool__tsuru_request')
+    def test_add_node_to_pool_with_none_params(self, mocked_tsuru_request):
+        mocked_tsuru_request.return_value = (200, None)
+        pool_handler = plugin.TsuruPool("foobar")
+        pool_handler.add_node_to_pool('127.0.0.1', '4243', 'http', None)
+        node_add_dict = {'address': 'http://127.0.0.1:4243', 'pool': 'foobar'}
+        mocked_tsuru_request.assert_called_once_with("POST", "/docker/node?register=true",
                                                      node_add_dict)
 
     def test_return_machines_templates(self):
