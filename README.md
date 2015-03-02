@@ -33,6 +33,7 @@ optional arguments:
                         Docker scheme - if something goes wrong, node will be
                         re-add using it as docker scheme (only when using
                         IaaS)
+  --pre_provision       Pre-provision all nodes on IaaS before start moving
 ```
 
 ## Example (running with dry mode)
