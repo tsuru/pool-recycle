@@ -5,7 +5,7 @@
 .PHONY: test deps
 
 test: deps
-	@python -m unittest discover
+	@python -m unittest discover --verbose
 	@flake8 --max-line-length=110 .
 
 deps:

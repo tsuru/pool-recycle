@@ -293,6 +293,7 @@ def pool_recycle(pool_name, destroy_node=False, dry_mode=False, max_retry=10, wa
                     template_idx = 0
         except Exception, e:
             for node in pre_provision_nodes:
+                pool_handler.remove_node_from_pool(node)
                 pool_handler.remove_machine_from_iaas(node)
             raise e
 

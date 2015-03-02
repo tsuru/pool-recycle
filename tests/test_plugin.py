@@ -46,10 +46,12 @@ class FakeTsuruPool(object):
         return True
 
     def create_new_node(self, template):
-        return self.new_nodes.pop(0)
+        new_node = self.new_nodes.pop(0)
+        self.nodes_on_pool.append(new_node)
+        return new_node
 
     def add_node_to_pool(self, node_url, docker_port, docker_scheme, metadata):
-        self.nodes_on_pool.extend(node_url)
+        self.nodes_on_pool.append(node_url)
         return True
 
     def get_machine_metadata_from_iaas(self, node):
@@ -525,6 +527,27 @@ class TsuruPoolTestCase(unittest.TestCase):
         exception_msg = move_exception.exception.message
         self.assertEqual(stdout.write.mock_calls, call_stdout_list)
         self.assertEqual(exception_msg, 'error moving 127.0.0.1 to 1.2.3.4')
+
+    @patch('sys.stderr')
+    @patch('sys.stdout')
+    @patch('pool_recycle.plugin.TsuruPool')
+    def test_pool_recycle_running_with_pre_provision(self, tsuru_pool_mock, stdout, stderr):
+        tsuru_pool_mock.return_value = FakeTsuruPool('foobar')
+        plugin.pool_recycle('foobar', pre_provision=True)
+        call_stdout_list = [call('Creating new node on pool "foobar" using templateA template\n'),
+                            call('Creating new node on pool "foobar" using templateB template\n'),
+                            call('Creating new node on pool "foobar" using templateA template\n'),
+                            call('Using 9.10.11.12 node as destination node\n'),
+                            call('Removing node "127.0.0.1" from pool "foobar"\n'),
+                            call('Moving all containers from old node "127.0.0.1" to new node ' +
+                                 '"9.10.11.12"\n'),
+                            call('Using 5.6.7.8 node as destination node\n'),
+                            call('Removing node "10.10.1.1" from pool "foobar"\n'),
+                            call('Moving all containers from old node "10.10.1.1" to new node "5.6.7.8"\n'),
+                            call('Using 1.2.3.4 node as destination node\n'),
+                            call('Removing node "10.1.1.2" from pool "foobar"\n'),
+                            call('Moving all containers from old node "10.1.1.2" to new node "1.2.3.4"\n')]
+        self.assertEqual(stdout.write.mock_calls, call_stdout_list)
 
     def tearDown(self):
         self.patcher.stop()
