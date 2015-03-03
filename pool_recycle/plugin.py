@@ -105,7 +105,8 @@ class TsuruPool(object):
         if not (re.match(r'^https?://', node_url)):
             node_url = '{}://{}:{}'.format(docker_scheme, node_url, docker_port)
         try:
-            post_data = dict({"address": node_url, "pool": self.pool}, **params)
+            metadata = params['metadata']
+            post_data = dict({"address": node_url, "pool": self.pool}, **metadata)
         except TypeError:
             post_data = {"address": node_url, "pool": self.pool}
         (return_code,
@@ -322,8 +323,8 @@ def pool_recycle(pool_name, destroy_node=False, dry_mode=False, max_retry=10, wa
             sys.stdout.write('Removing node "{}" from pool "{}"\n'.format(node, pool_name))
             pool_handler.remove_node_from_pool(node)
             if pre_provision:
-                node_params = pool_handler.get_machine_metadata_from_iaas(node)
-                pool_handler.add_node_to_pool(node, docker_port, docker_scheme, node_params)
+                node_params = pool_handler.get_machine_metadata_from_iaas(new_node)
+                pool_handler.add_node_to_pool(new_node, docker_port, docker_scheme, node_params)
             sys.stdout.write('Moving all containers from old node "{}"'
                              ' to new node "{}"\n'.format(node, new_node))
             pool_handler.move_node_containers(node, new_node, 0, max_retry, wait_timeout)
@@ -338,13 +339,15 @@ def pool_recycle(pool_name, destroy_node=False, dry_mode=False, max_retry=10, wa
             ''' Try to re-insert node on pool '''
             node_params = pool_handler.get_machine_metadata_from_iaas(node)
             pool_handler.add_node_to_pool(node, docker_port, docker_scheme, node_params)
-            raise e
-        except Exception, e:
-            raise e
-        finally:
-            if not dry_mode:
+            if not dry_mode and pre_provision:
                 for node in pre_provision_nodes:
                     pool_handler.remove_machine_from_iaas(node)
+            raise e
+        except Exception, e:
+            if not dry_mode and pre_provision:
+                for node in pre_provision_nodes:
+                    pool_handler.remove_machine_from_iaas(node)
+            raise e
 
 
 def pool_recycle_parser(args):

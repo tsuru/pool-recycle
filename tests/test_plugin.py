@@ -19,6 +19,7 @@ class FakeTsuruPool(object):
                  remove_machine_from_iaas_error=False):
         self.pool = pool
         self.nodes_on_pool = ['127.0.0.1', '10.10.1.1', '10.1.1.2']
+        self.machines_on_pool = ['127.0.0.1', '10.10.1.1', '10.1.1.2']
         self.new_nodes = ['1.2.3.4', '5.6.7.8', '9.10.11.12']
         self.move_node_containers_error = move_node_containers_error
         self.remove_node_from_pool_error = remove_node_from_pool_error
@@ -29,6 +30,9 @@ class FakeTsuruPool(object):
 
     def get_nodes(self):
         return list(self.nodes_on_pool)
+
+    def get_machines(self):
+        return list(self.machines_on_pool)
 
     def remove_node_from_pool(self, node):
         if self.remove_node_from_pool_error:
@@ -43,11 +47,13 @@ class FakeTsuruPool(object):
     def remove_machine_from_iaas(self, node):
         if self.remove_machine_from_iaas_error:
             raise RemoveMachineFromIaaSError("error removing node {} from IaaS".format(node))
+        self.machines_on_pool.remove(node)
         return True
 
     def create_new_node(self, template):
         new_node = self.new_nodes.pop(0)
         self.nodes_on_pool.append(new_node)
+        self.machines_on_pool.append(new_node)
         return new_node
 
     def add_node_to_pool(self, node_url, docker_port, docker_scheme, metadata):
@@ -196,9 +202,10 @@ class TsuruPoolTestCase(unittest.TestCase):
     def test_add_node_to_pool(self, mocked_tsuru_request):
         mocked_tsuru_request.return_value = (200, None)
         pool_handler = plugin.TsuruPool("foobar")
-        extra_params = {'blah': 'bleh', 'foo': 'bar'}
+        extra_params = {'id': '001122', 'metadata': {'bla': 'ble', 'xxx': 'yyy'}}
         pool_handler.add_node_to_pool('127.0.0.1', '4243', 'http', extra_params)
-        node_add_dict = dict({'address': 'http://127.0.0.1:4243', 'pool': 'foobar'}, **extra_params)
+        node_add_dict = dict({'address': 'http://127.0.0.1:4243', 'pool': 'foobar'},
+                             **extra_params['metadata'])
         mocked_tsuru_request.assert_called_once_with("POST", "/docker/node?register=true",
                                                      node_add_dict)
 
@@ -548,6 +555,17 @@ class TsuruPoolTestCase(unittest.TestCase):
                             call('Removing node "10.1.1.2" from pool "foobar"\n'),
                             call('Moving all containers from old node "10.1.1.2" to new node "1.2.3.4"\n')]
         self.assertEqual(stdout.write.mock_calls, call_stdout_list)
+
+    @patch('sys.stderr')
+    @patch('sys.stdout')
+    @patch('pool_recycle.plugin.TsuruPool')
+    def test_pool_recycle_with_pre_provision_cleanup_on_error(self, tsuru_pool_mock, stdout, stderr):
+        fake_pool = FakeTsuruPool('foobar', move_node_containers_error=True)
+        tsuru_pool_mock.return_value = fake_pool
+        with self.assertRaises(MoveNodeContainersError):
+            plugin.pool_recycle("foobar", pre_provision=True)
+        self.assertEqual(['127.0.0.1', '10.10.1.1', '10.1.1.2', '9.10.11.12'], fake_pool.get_machines())
+        self.assertEqual(['10.10.1.1', '10.1.1.2', '9.10.11.12', '127.0.0.1'], fake_pool.get_nodes())
 
     def tearDown(self):
         self.patcher.stop()
