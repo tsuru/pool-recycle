@@ -559,6 +559,16 @@ class TsuruPoolTestCase(unittest.TestCase):
     @patch('sys.stderr')
     @patch('sys.stdout')
     @patch('pool_recycle.plugin.TsuruPool')
+    def test_pool_recycle_with_pre_provision_with_remove_old_nodes(self, tsuru_pool_mock, stdout, stderr):
+        fake_pool = FakeTsuruPool('foobar')
+        tsuru_pool_mock.return_value = fake_pool
+        plugin.pool_recycle("foobar", pre_provision=True, destroy_node=True)
+        self.assertEqual(['1.2.3.4', '5.6.7.8', '9.10.11.12'], fake_pool.get_machines())
+        self.assertEqual(['9.10.11.12', '5.6.7.8', '1.2.3.4'], fake_pool.get_nodes())
+
+    @patch('sys.stderr')
+    @patch('sys.stdout')
+    @patch('pool_recycle.plugin.TsuruPool')
     def test_pool_recycle_with_pre_provision_cleanup_on_error(self, tsuru_pool_mock, stdout, stderr):
         fake_pool = FakeTsuruPool('foobar', move_node_containers_error=True)
         tsuru_pool_mock.return_value = fake_pool
