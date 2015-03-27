@@ -10,13 +10,15 @@ import json
 from io import StringIO
 from mock import patch, Mock, call
 from pool_recycle import plugin
-from pool_recycle.plugin import MoveNodeContainersError, RemoveNodeFromPoolError, RemoveMachineFromIaaSError
+from pool_recycle.plugin import (MoveNodeContainersError, RemoveNodeFromPoolError,
+                                 RemoveMachineFromIaaSError, NewNodeError)
 
 
 class FakeTsuruPool(object):
 
     def __init__(self, pool, move_node_containers_error=False, remove_node_from_pool_error=False,
-                 remove_machine_from_iaas_error=False):
+                 remove_machine_from_iaas_error=False, pre_provision_error=False,
+                 raise_errors_on_call_counter=0):
         self.pool = pool
         self.nodes_on_pool = ['127.0.0.1', '10.10.1.1', '10.1.1.2']
         self.machines_on_pool = ['127.0.0.1', '10.10.1.1', '10.1.1.2']
@@ -24,6 +26,9 @@ class FakeTsuruPool(object):
         self.move_node_containers_error = move_node_containers_error
         self.remove_node_from_pool_error = remove_node_from_pool_error
         self.remove_machine_from_iaas_error = remove_machine_from_iaas_error
+        self.pre_provision_error = pre_provision_error
+        self.call_count = 0
+        self.raise_errors_on_call_counter = raise_errors_on_call_counter
 
     def get_machines_templates(self):
         return ['templateA', 'templateB']
@@ -35,25 +40,31 @@ class FakeTsuruPool(object):
         return list(self.machines_on_pool)
 
     def remove_node_from_pool(self, node):
-        if self.remove_node_from_pool_error:
+        if self.remove_node_from_pool_error and self.call_count >= self.raise_errors_on_call_counter:
             raise RemoveNodeFromPoolError("error on node {}".format(node))
+        self.call_count += 1
         self.nodes_on_pool.remove(node)
 
     def move_node_containers(self, node, new_node, cur_retry, max_retry, wait_timeout):
-        if self.move_node_containers_error:
+        if self.move_node_containers_error and self.call_count >= self.raise_errors_on_call_counter:
             raise MoveNodeContainersError("error moving {} to {}".format(node, new_node))
+        self.call_count += 1
         return True
 
     def remove_machine_from_iaas(self, node):
-        if self.remove_machine_from_iaas_error:
+        if self.remove_machine_from_iaas_error and self.call_count >= self.raise_errors_on_call_counter:
             raise RemoveMachineFromIaaSError("error removing node {} from IaaS".format(node))
         self.machines_on_pool.remove(node)
+        self.call_count += 1
         return True
 
     def create_new_node(self, template):
+        if self.pre_provision_error and self.call_count >= self.raise_errors_on_call_counter:
+            raise NewNodeError("error adding new node on IaaS")
         new_node = self.new_nodes.pop(0)
         self.nodes_on_pool.append(new_node)
         self.machines_on_pool.append(new_node)
+        self.call_count += 1
         return new_node
 
     def add_node_to_pool(self, node_url, docker_port, docker_scheme, metadata):
@@ -569,13 +580,33 @@ class TsuruPoolTestCase(unittest.TestCase):
     @patch('sys.stderr')
     @patch('sys.stdout')
     @patch('pool_recycle.plugin.TsuruPool')
-    def test_pool_recycle_with_pre_provision_cleanup_on_error(self, tsuru_pool_mock, stdout, stderr):
+    def test_pool_recycle_with_pre_provision_cleanup_on_move_error(self, tsuru_pool_mock, stdout, stderr):
         fake_pool = FakeTsuruPool('foobar', move_node_containers_error=True)
         tsuru_pool_mock.return_value = fake_pool
         with self.assertRaises(MoveNodeContainersError):
             plugin.pool_recycle("foobar", pre_provision=True)
         self.assertEqual(['127.0.0.1', '10.10.1.1', '10.1.1.2', '9.10.11.12'], fake_pool.get_machines())
         self.assertEqual(['10.10.1.1', '10.1.1.2', '9.10.11.12', '127.0.0.1'], fake_pool.get_nodes())
+
+    @patch('sys.stderr')
+    @patch('sys.stdout')
+    @patch('pool_recycle.plugin.TsuruPool')
+    def test_pool_recycle_with_pre_provision_cleanup_on_node_create_error(self, tsuru_pool_mock, stdout,
+                                                                          stderr):
+        fake_pool = FakeTsuruPool('foobar', pre_provision_error=True, raise_errors_on_call_counter=1)
+        tsuru_pool_mock.return_value = fake_pool
+        with self.assertRaises(NewNodeError):
+            plugin.pool_recycle("foobar", pre_provision=True)
+        self.assertEqual(['127.0.0.1', '10.10.1.1', '10.1.1.2'], fake_pool.get_machines())
+        self.assertEqual(['127.0.0.1', '10.10.1.1', '10.1.1.2'], fake_pool.get_nodes())
+
+    @patch('sys.stderr')
+    @patch('sys.stdout')
+    @patch('pool_recycle.plugin.pool_recycle')
+    def test_pool_recycle_parser_with_all_options_set(self, pool_recycle, stdout, stderr):
+        args = ["-p", "foobar", "-r", "-d", "-m", "100", "-t", "30", "-P", "2222", "-s", "https"]
+        plugin.pool_recycle_parser(args)
+        pool_recycle.assert_called_once_with('foobar', True, True, 100, 30, '2222', 'https', False)
 
     def tearDown(self):
         self.patcher.stop()
