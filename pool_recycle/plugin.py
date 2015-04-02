@@ -54,12 +54,15 @@ class RemoveNodeFromPoolError(Exception):
 
 
 class RemoveMachineFromIaaSError(Exception):
-    def __init__(self, name):
+    def __init__(self, name, machine_id=None):
         super(Exception, self).__init__(name)
         self.name = name
+        self.machine_id = machine_id
 
     def __str__(self):
-        return 'Error removing machine from IaaS: "{}"'.format(self.name)
+        if self.machine_id is None:
+            return 'Error removing machine from IaaS: "{}"'.format(self.name)
+        return 'Error removing machine {} from IaaS: "{}"'.format(self.machine_id, self.name)
 
     def __unicode__(self):
         return unicode(str(self))
@@ -162,7 +165,7 @@ class TsuruPool(object):
         return_code, msg = self.__tsuru_request("DELETE", "/iaas/machines/{}".format(machine_id))
 
         if return_code not in [200, 201, 204]:
-            raise RemoveMachineFromIaaSError(msg)
+            raise RemoveMachineFromIaaSError(msg, machine_id)
         return True
 
     def move_node_containers(self, node, new_node, cur_retry=0, max_retry=10, wait_timeout=180):
