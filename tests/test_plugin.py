@@ -297,6 +297,28 @@ class TsuruPoolTestCase(unittest.TestCase):
                 "Value": "97d7ad56-62b4-4d43-805a-2aee42619ac6"
             }
         ]
+    },
+    {
+        "Name": "template_green",
+        "IaaSName": "cloudstack_dev",
+        "Data": [
+            {
+                "Name": "pool",
+                "Value": "xxx_foobar"
+            },
+            {
+                "Name": "projectid",
+                "Value": "222f0798-e472-4216-a8ed-ce1950f419e8"
+            },
+            {
+                "Name": "displayname",
+                "Value": "docker_xxx"
+            },
+            {
+                "Name": "networkids",
+                "Value": "97d7ad56-62b4-4d43-805a-2aee42619ac6"
+            }
+        ]
     }
 ]
         '''

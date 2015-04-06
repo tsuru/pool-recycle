@@ -144,7 +144,7 @@ class TsuruPool(object):
             return iaas_templates
         for template in machines_templates:
             for item in template['Data']:
-                if 'pool' in item['Name'] and self.pool in item['Value']:
+                if 'pool' == item['Name'] and self.pool == item['Value']:
                     iaas_templates.append(template['Name'])
         return iaas_templates
 
