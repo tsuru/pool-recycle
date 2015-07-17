@@ -74,6 +74,9 @@ class FakeTsuruPool(object):
     def get_machine_metadata_from_iaas(self, node):
         return {'id': '001122', 'metadata': {'bla': 'ble', 'xxx': 'yyy'}}
 
+    def get_node_metadata(self, node):
+        return {'bla': 'ble', 'xxx': 'yyy'}
+
 
 class FakeURLopenResponse(StringIO):
 
@@ -234,10 +237,10 @@ class TsuruPoolTestCase(unittest.TestCase):
     def test_add_node_to_pool(self, mocked_tsuru_request):
         mocked_tsuru_request.return_value = (200, None)
         pool_handler = plugin.TsuruPool("foobar")
-        extra_params = {'id': '001122', 'metadata': {'bla': 'ble', 'xxx': 'yyy'}}
+        extra_params = {'bla': 'ble', 'xxx': 'yyy'}
         pool_handler.add_node_to_pool('127.0.0.1', '4243', 'http', extra_params)
         node_add_dict = dict({'address': 'http://127.0.0.1:4243', 'pool': 'foobar'},
-                             **extra_params['metadata'])
+                             **extra_params)
         mocked_tsuru_request.assert_called_once_with("POST", "/docker/node?register=true",
                                                      node_add_dict)
 
