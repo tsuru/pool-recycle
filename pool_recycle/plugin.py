@@ -145,7 +145,7 @@ class TsuruPool(object):
         new_node = set(new_nodes_list) - set(actual_nodes_list)
         if len(new_node) == 1:
             return new_node.pop()
-        return False
+        raise NewNodeError("New node not found on Tsuru")
 
     def get_machines_templates(self):
         (return_code,
