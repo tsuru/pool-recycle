@@ -304,8 +304,10 @@ def pool_recycle(pool_name, destroy_node=False, dry_mode=False, max_retry=10, wa
             for _ in xrange(len(nodes_to_recycle)):
                 sys.stdout.write('Creating new node on pool "{}" '
                                  'using {} template\n'.format(pool_name, pool_templates[template_idx]))
-                new_node = pool_handler.create_new_node(pool_templates[template_idx])
-                pool_handler.remove_node_from_pool(new_node)
+                new_node = {}
+                new_node['address'] = pool_handler.create_new_node(pool_templates[template_idx])
+                new_node['metadata'] = pool_handler.get_node_metadata(new_node['address'])
+                pool_handler.remove_node_from_pool(new_node['address'])
                 pre_provision_nodes.append(new_node)
                 template_idx += 1
                 if template_idx >= templates_len:
@@ -313,11 +315,11 @@ def pool_recycle(pool_name, destroy_node=False, dry_mode=False, max_retry=10, wa
         except Exception, e:
             for node in pre_provision_nodes:
                 try:
-                    pool_handler.remove_node_from_pool(node)
+                    pool_handler.remove_node_from_pool(node['address'])
                 except:
                     pass
                 try:
-                    pool_handler.remove_machine_from_iaas(node)
+                    pool_handler.remove_machine_from_iaas(node['address'])
                 except:
                     pass
             raise e
@@ -339,19 +341,20 @@ def pool_recycle(pool_name, destroy_node=False, dry_mode=False, max_retry=10, wa
         try:
             if pre_provision:
                 new_node = pre_provision_nodes.pop()
-                sys.stdout.write('Using {} node as destination node\n'.format(new_node))
+                sys.stdout.write('Using {} node as destination node\n'.format(new_node['address']))
             else:
                 sys.stdout.write('Creating new node on pool "{}" '
                                  'using {} template\n'.format(pool_name, pool_templates[template_idx]))
-                new_node = pool_handler.create_new_node(pool_templates[template_idx])
+                new_node = {}
+                new_node['address'] = pool_handler.create_new_node(pool_templates[template_idx])
             sys.stdout.write('Removing node "{}" from pool "{}"\n'.format(node, pool_name))
+            node_data = pool_handler.get_node_metadata(node)
             pool_handler.remove_node_from_pool(node)
             if pre_provision:
-                node_params = pool_handler.get_machine_metadata_from_iaas(new_node)
-                pool_handler.add_node_to_pool(new_node, docker_port, docker_scheme, node_params['metadata'])
+                pool_handler.add_node_to_pool(new_node['address'], docker_port, docker_scheme, new_node['metadata'])
             sys.stdout.write('Moving all containers from old node "{}"'
-                             ' to new node "{}"\n'.format(node, new_node))
-            pool_handler.move_node_containers(node, new_node, 0, max_retry, wait_timeout)
+                             ' to new node "{}"\n'.format(node, new_node['address']))
+            pool_handler.move_node_containers(node, new_node['address'], 0, max_retry, wait_timeout)
             template_idx += 1
             if template_idx >= templates_len:
                 template_idx = 0
@@ -361,16 +364,15 @@ def pool_recycle(pool_name, destroy_node=False, dry_mode=False, max_retry=10, wa
             new_node = None
         except (MoveNodeContainersError, RemoveNodeFromPoolError, KeyboardInterrupt), e:
             ''' Try to re-insert node on pool '''
-            node_params = pool_handler.get_machine_metadata_from_iaas(node)
-            pool_handler.add_node_to_pool(node, docker_port, docker_scheme, node_params['metadata'])
+            pool_handler.add_node_to_pool(node, docker_port, docker_scheme, node_data)
             if not dry_mode and pre_provision:
                 for node in pre_provision_nodes:
-                    pool_handler.remove_machine_from_iaas(node)
+                    pool_handler.remove_machine_from_iaas(node['address'])
             raise e
         except Exception, e:
             if not dry_mode and pre_provision:
                 for node in pre_provision_nodes:
-                    pool_handler.remove_machine_from_iaas(node)
+                    pool_handler.remove_machine_from_iaas(node['address'])
             raise e
 
 

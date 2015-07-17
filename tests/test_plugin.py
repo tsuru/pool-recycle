@@ -181,16 +181,20 @@ class TsuruPoolTestCase(unittest.TestCase):
         self.assertListEqual(pool_handler.get_nodes(), [])
 
     def test_get_node_metadata(self):
-        fake_response_iaas = '''{"machines":[{"Id": "abc", "Address": "10.10.2.1", "CreationParams": {"test": "abc"}}],
-                                 "nodes":[{"Address": "http://10.20.1.2:4243", "Metadata": {"test": "cde"}}]}'''
+        fake_response_iaas = '''{"machines":[{"Id": "abc", "Address": "10.10.2.1",
+                                              "CreationParams": {"test": "abc"}}],
+                                 "nodes":[{"Address": "http://10.20.1.2:4243",
+                                           "Metadata": {"test": "cde"}}]}'''
         self.urlopen_mock.return_value = FakeURLopenResponse(fake_response_iaas, 200)
         pool_handler = plugin.TsuruPool("foobar")
         response_metadata = {u'test': u'cde'}
         self.assertEqual(pool_handler.get_node_metadata('http://10.20.1.2'), response_metadata)
 
     def test_get_node_metadata_return_none(self):
-        fake_response_iaas = '''{"machines":[{"Id": "abc", "Address": "10.10.2.1", "CreationParams": {"test": "abc"}}],
-                                 "nodes":[{"Address": "http://10.20.1.2:4243", "Metadata": {"test": "cde"}}]}'''
+        fake_response_iaas = '''{"machines":[{"Id": "abc", "Address": "10.10.2.1",
+                                              "CreationParams": {"test": "abc"}}],
+                                 "nodes":[{"Address": "http://10.20.1.2:4243",
+                                           "Metadata": {"test": "cde"}}]}'''
         self.urlopen_mock.return_value = FakeURLopenResponse(fake_response_iaas, 200)
         pool_handler = plugin.TsuruPool("foobar")
         self.assertEqual(pool_handler.get_node_metadata('http://10.20.20.2'), None)
