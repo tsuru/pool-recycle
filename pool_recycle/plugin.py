@@ -104,6 +104,22 @@ class TsuruPool(object):
                 pass
         return None
 
+    def get_node_metadata(self, node):
+        node_hostname = self.get_address(node)
+        return_code, nodes_list = self.__tsuru_request("GET", "/docker/node")
+        if return_code not in [200, 201, 204]:
+            raise Exception('Error get node metadata from tsuru: "{}"'.format(nodes_list))
+
+        try:
+            machines_nodes_list = json.load(nodes_list)
+            for node_data in machines_nodes_list['nodes']:
+                node_data_hostname = self.get_address(node_data['Address'])
+                if node_data_hostname == node_hostname:
+                    return node_data['Metadata']
+        except:
+            pass
+        return None
+
     def add_node_to_pool(self, node_url, docker_port, docker_scheme, params={}):
         if not (re.match(r'^https?://', node_url)):
             node_url = '{}://{}:{}'.format(docker_scheme, node_url, docker_port)
