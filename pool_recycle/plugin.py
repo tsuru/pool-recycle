@@ -351,7 +351,8 @@ def pool_recycle(pool_name, destroy_node=False, dry_mode=False, max_retry=10, wa
             node_data = pool_handler.get_node_metadata(node)
             pool_handler.remove_node_from_pool(node)
             if pre_provision:
-                pool_handler.add_node_to_pool(new_node['address'], docker_port, docker_scheme, new_node['metadata'])
+                pool_handler.add_node_to_pool(new_node['address'], docker_port, docker_scheme,
+                                              new_node['metadata'])
             sys.stdout.write('Moving all containers from old node "{}"'
                              ' to new node "{}"\n'.format(node, new_node['address']))
             pool_handler.move_node_containers(node, new_node['address'], 0, max_retry, wait_timeout)
