@@ -165,7 +165,7 @@ class TsuruPool(object):
 
     def remove_node_from_pool(self, node):
         headers = {'address': node}
-        return_code, msg = self.__tsuru_request("DELETE", "/docker/node",
+        return_code, msg = self.__tsuru_request("DELETE", "/docker/node?no-rebalance=true",
                                                 headers)
         if return_code not in [200, 201, 204]:
             raise RemoveNodeFromPoolError(msg)
