@@ -253,7 +253,7 @@ class TsuruPoolTestCase(unittest.TestCase):
         pool_handler.add_node_to_pool('127.0.0.1', '4243', 'http',
                                       extra_params)
         extra_params["address"] = "http://127.0.0.1:4243"
-        extra_params["Metadata.pool"] = "foobar"
+        extra_params["pool"] = "foobar"
         extra_params["register"] = "true"
         mock.assert_called_once_with(**extra_params)
 
@@ -264,7 +264,7 @@ class TsuruPoolTestCase(unittest.TestCase):
         pool_handler.add_node_to_pool('127.0.0.1', '4243', 'http', None)
         expected_call = {
             "address": "http://127.0.0.1:4243",
-            "Metadata.pool": "foobar",
+            "pool": "foobar",
             "register": "true",
         }
         mock.assert_called_once_with(**expected_call)
@@ -608,65 +608,11 @@ class TsuruPoolTestCase(unittest.TestCase):
 
     @patch('sys.stderr')
     @patch('sys.stdout')
-    @patch('pool_recycle.plugin.TsuruPool')
-    def test_pool_recycle_running_with_pre_provision(self, tsuru_pool_mock, stdout, stderr):
-        tsuru_pool_mock.return_value = FakeTsuruPool('foobar')
-        plugin.pool_recycle('foobar', pre_provision=True)
-        call_stdout_list = [call('Creating new node on pool "foobar" using templateA template\n'),
-                            call('Creating new node on pool "foobar" using templateB template\n'),
-                            call('Creating new node on pool "foobar" using templateA template\n'),
-                            call('Using 9.10.11.12 node as destination node\n'),
-                            call('Removing node "127.0.0.1" from pool "foobar"\n'),
-                            call('Moving all containers from old node "127.0.0.1" to new node ' +
-                                 '"9.10.11.12"\n'),
-                            call('Using 5.6.7.8 node as destination node\n'),
-                            call('Removing node "10.10.1.1" from pool "foobar"\n'),
-                            call('Moving all containers from old node "10.10.1.1" to new node "5.6.7.8"\n'),
-                            call('Using 1.2.3.4 node as destination node\n'),
-                            call('Removing node "10.1.1.2" from pool "foobar"\n'),
-                            call('Moving all containers from old node "10.1.1.2" to new node "1.2.3.4"\n')]
-        self.assertEqual(stdout.write.mock_calls, call_stdout_list)
-
-    @patch('sys.stderr')
-    @patch('sys.stdout')
-    @patch('pool_recycle.plugin.TsuruPool')
-    def test_pool_recycle_with_pre_provision_with_remove_old_nodes(self, tsuru_pool_mock, stdout, stderr):
-        fake_pool = FakeTsuruPool('foobar')
-        tsuru_pool_mock.return_value = fake_pool
-        plugin.pool_recycle("foobar", pre_provision=True, destroy_node=True)
-        self.assertEqual(['1.2.3.4', '5.6.7.8', '9.10.11.12'], fake_pool.get_machines())
-        self.assertEqual(['9.10.11.12', '5.6.7.8', '1.2.3.4'], fake_pool.get_nodes())
-
-    @patch('sys.stderr')
-    @patch('sys.stdout')
-    @patch('pool_recycle.plugin.TsuruPool')
-    def test_pool_recycle_with_pre_provision_cleanup_on_move_error(self, tsuru_pool_mock, stdout, stderr):
-        fake_pool = FakeTsuruPool('foobar', move_node_containers_error=True)
-        tsuru_pool_mock.return_value = fake_pool
-        with self.assertRaises(MoveNodeContainersError):
-            plugin.pool_recycle("foobar", pre_provision=True)
-        self.assertEqual(['127.0.0.1', '10.10.1.1', '10.1.1.2', '9.10.11.12'], fake_pool.get_machines())
-        self.assertEqual(['10.10.1.1', '10.1.1.2', '9.10.11.12', '127.0.0.1'], fake_pool.get_nodes())
-
-    @patch('sys.stderr')
-    @patch('sys.stdout')
-    @patch('pool_recycle.plugin.TsuruPool')
-    def test_pool_recycle_with_pre_provision_cleanup_on_node_create_error(self, tsuru_pool_mock, stdout,
-                                                                          stderr):
-        fake_pool = FakeTsuruPool('foobar', pre_provision_error=True, raise_errors_on_call_counter=1)
-        tsuru_pool_mock.return_value = fake_pool
-        with self.assertRaises(NewNodeError):
-            plugin.pool_recycle("foobar", pre_provision=True)
-        self.assertEqual(['127.0.0.1', '10.10.1.1', '10.1.1.2'], fake_pool.get_machines())
-        self.assertEqual(['127.0.0.1', '10.10.1.1', '10.1.1.2'], fake_pool.get_nodes())
-
-    @patch('sys.stderr')
-    @patch('sys.stdout')
     @patch('pool_recycle.plugin.pool_recycle')
     def test_pool_recycle_parser_with_all_options_set(self, pool_recycle, stdout, stderr):
         args = ["-p", "foobar", "-r", "-d", "-m", "100", "-t", "30", "-P", "2222", "-s", "https"]
         plugin.pool_recycle_parser(args)
-        pool_recycle.assert_called_once_with('foobar', True, True, 100, 30, '2222', 'https', False)
+        pool_recycle.assert_called_once_with('foobar', True, True, 100, 30, '2222', 'https')
 
     def tearDown(self):
         self.patcher.stop()
