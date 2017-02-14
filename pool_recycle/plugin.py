@@ -128,9 +128,12 @@ class TsuruPool(object):
         if not (re.match(r'^https?://', node_url)):
             node_url = '{}://{}:{}'.format(docker_scheme, node_url, docker_port)
         try:
-            post_data = dict({"address": node_url, "pool": self.pool}, **params)
+            post_data = dict({
+                "address": node_url,
+                "Metadata.pool": self.pool
+            }, **params)
         except TypeError:
-            post_data = {"address": node_url, "pool": self.pool}
+            post_data = {"address": node_url, "Metadata.pool": self.pool}
         post_data["register"] = "true"
         try:
             self.client.nodes.create(**post_data)
@@ -141,7 +144,11 @@ class TsuruPool(object):
     def create_new_node(self, iaas_template):
         actual_nodes_list = self.get_nodes()
         try:
-            self.client.nodes.create(register="false", template=iaas_template)
+            data = {
+                "register": "false",
+                "Metadata.template": iaas_template
+            }
+            self.client.nodes.create(**data)
         except Exception as ex:
             raise NewNodeError("{}".format(ex))
         new_nodes_list = self.get_nodes()
