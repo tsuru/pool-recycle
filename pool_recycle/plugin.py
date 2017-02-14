@@ -7,14 +7,12 @@
 import os
 import sys
 import argparse
-import json
-import urllib2
 import socket
 import re
 import time
 
-from functools import partial
 from urlparse import urlparse
+from tsuruclient import client
 
 
 class NewNodeError(Exception):
@@ -74,15 +72,17 @@ class TsuruPool(object):
         try:
             self.tsuru_target = os.environ['TSURU_TARGET'].rstrip("/")
             self.tsuru_token = os.environ['TSURU_TOKEN']
+            self.client = client.Client(self.tsuru_target, self.tsuru_token)
         except KeyError:
             raise KeyError("TSURU_TARGET or TSURU_TOKEN envs not set")
         self.pool = pool
 
     def get_nodes(self):
-        return_code, docker_nodes = self.__tsuru_request("GET", "/docker/node")
-        if return_code not in [200, 201, 204]:
-            raise Exception('Error get nodes from tsuru: "{}"'.format(docker_nodes))
-        docker_nodes = json.loads(docker_nodes.read())
+        try:
+            docker_nodes = self.client.nodes.list()
+        except Exception as ex:
+            raise Exception('Error get nodes from tsuru: "{}"'.format(ex))
+
         pool_nodes = []
         if 'nodes' in docker_nodes and docker_nodes['nodes'] is not None:
             for node in docker_nodes['nodes']:
@@ -93,10 +93,13 @@ class TsuruPool(object):
 
     def get_machine_metadata_from_iaas(self, node):
         node_hostname = self.get_address(node)
-        return_code, iaas_machines = self.__tsuru_request("GET", "/iaas/machines")
-        if return_code not in [200, 201, 204]:
-            raise Exception('Error get iaas machines from tsuru: "{}"'.format(iaas_machines))
-        for machine in json.load(iaas_machines):
+        try:
+            iaas_machines = self.client.machines.list()
+        except Exception as ex:
+            raise Exception('Error get iaas machines from tsuru: "{}"'
+                            .format(ex))
+
+        for machine in iaas_machines:
             try:
                 if machine['Address'] == node_hostname:
                     return {'id': machine['Id'], 'metadata': machine['CreationParams']}
@@ -106,13 +109,14 @@ class TsuruPool(object):
 
     def get_node_metadata(self, node):
         node_hostname = self.get_address(node)
-        return_code, nodes_list = self.__tsuru_request("GET", "/docker/node")
-        if return_code not in [200, 201, 204]:
-            raise Exception('Error get node metadata from tsuru: "{}"'.format(nodes_list))
+        try:
+            nodes_list = self.client.nodes.list()
+        except Exception as ex:
+            raise Exception('Error get node metadata from tsuru: "{}"'
+                            .format(ex))
 
         try:
-            machines_nodes_list = json.load(nodes_list)
-            for node_data in machines_nodes_list['nodes']:
+            for node_data in nodes_list['nodes']:
                 node_data_hostname = self.get_address(node_data['Address'])
                 if node_data_hostname == node_hostname:
                     return node_data['Metadata']
@@ -127,20 +131,19 @@ class TsuruPool(object):
             post_data = dict({"address": node_url, "pool": self.pool}, **params)
         except TypeError:
             post_data = {"address": node_url, "pool": self.pool}
-        (return_code,
-         msg) = self.__tsuru_request("POST", "/docker/node?register=true", post_data)
-        if return_code not in [200, 201, 204]:
-            raise NewNodeError(msg)
+        post_data["register"] = "true"
+        try:
+            self.client.nodes.create(**post_data)
+        except Exception as ex:
+            raise NewNodeError("{}".format(ex))
         return True
 
     def create_new_node(self, iaas_template):
         actual_nodes_list = self.get_nodes()
-        (return_code,
-         msg) = self.__tsuru_request("POST", "/docker/node?register=false",
-                                             {'template': iaas_template})
-        if return_code not in [200, 201, 204]:
-            raise NewNodeError(msg)
-
+        try:
+            self.client.nodes.create(register="false", template=iaas_template)
+        except Exception as ex:
+            raise NewNodeError("{}".format(ex))
         new_nodes_list = self.get_nodes()
         new_node = set(new_nodes_list) - set(actual_nodes_list)
         if len(new_node) == 1:
@@ -148,12 +151,11 @@ class TsuruPool(object):
         raise NewNodeError("New node not found on Tsuru")
 
     def get_machines_templates(self):
-        (return_code,
-         machines_templates) = self.__tsuru_request("GET", "/iaas/templates")
-        if return_code not in [200, 201, 204]:
-            raise Exception('Error getting machines templates '
-                            'on tsuru: "{}"'.format(machines_templates))
-        machines_templates = json.loads(machines_templates.read())
+        try:
+            machines_templates = self.client.templates.list()
+        except Exception as ex:
+            raise Exception('Error getting machines templates on tsuru: {}'
+                            .format(ex))
         iaas_templates = []
         if machines_templates is None:
             return iaas_templates
@@ -164,12 +166,11 @@ class TsuruPool(object):
         return iaas_templates
 
     def remove_node_from_pool(self, node):
-        headers = {'address': node}
-        return_code, msg = self.__tsuru_request("DELETE", "/docker/node?no-rebalance=true",
-                                                headers)
-        if return_code not in [200, 201, 204]:
-            raise RemoveNodeFromPoolError(msg)
-
+        params = {'no-rebalance': 'true', 'address': node}
+        try:
+            self.client.nodes.remove(**params)
+        except Exception as ex:
+            raise RemoveNodeFromPoolError("{}".format(ex))
         return True
 
     def remove_machine_from_iaas(self, node):
@@ -177,10 +178,10 @@ class TsuruPool(object):
         if machine_metadata is None:
             raise RemoveMachineFromIaaSError("machine {} not found on IaaS".format(node))
         machine_id = machine_metadata['id']
-        return_code, msg = self.__tsuru_request("DELETE", "/iaas/machines/{}".format(machine_id))
-
-        if return_code not in [200, 201, 204]:
-            raise RemoveMachineFromIaaSError(msg, machine_id)
+        try:
+            self.client.machines.delete(machine_id)
+        except Exception as ex:
+            raise RemoveMachineFromIaaSError("{}".format(ex), machine_id)
         return True
 
     def move_node_containers(self, node, new_node, cur_retry=0, max_retry=10, wait_timeout=180):
@@ -190,17 +191,14 @@ class TsuruPool(object):
             raise MoveNodeContainersError('node address {} or {} '
                                           '- are invalids'.format(node, new_node))
 
-        (return_code,
-         move_progress) = self.__tsuru_request("POST",
-                                               "/docker/containers/move",
-                                               {'from': node_from,
-                                                'to': node_to})
-        if return_code not in [200, 201, 204]:
-            raise MoveNodeContainersError(move_progress)
+        try:
+            move_progress = self.client.containers.move(src=node_from, dst=node_to)
+        except Exception as ex:
+            raise MoveNodeContainersError("{}".format(ex))
 
         moving_error = False
         no_data = True
-        for move_msg in self.json_parser(move_progress):
+        for move_msg in move_progress:
             no_data = False
             if 'Error' in move_msg['Message']:
                 moving_error = True
@@ -224,29 +222,6 @@ class TsuruPool(object):
                                           .format(node, new_node))
         return True
 
-    def __tsuru_request(self, method, path, body=None):
-        url = "{}{}".format(self.tsuru_target, path)
-        request = urllib2.Request(url)
-        request.add_header("Authorization", "bearer " + self.tsuru_token)
-        request.get_method = lambda: method
-
-        if body:
-            request.add_data(json.dumps(body))
-
-        response_code = response_msg = None
-        try:
-            response = urllib2.urlopen(request)
-        except urllib2.HTTPError as e:
-            response_code = e.code
-            response_msg = e.read().rstrip("\n")
-            pass
-
-        if response_code:
-            return response_code, response_msg
-
-        response_code = response.getcode()
-        return response_code, response
-
     @staticmethod
     def get_address(node_name):
         try:
@@ -254,38 +229,6 @@ class TsuruPool(object):
             return(node_name)
         except socket.error:
             return urlparse(node_name).hostname
-
-    @staticmethod
-    def json_parser(fileobj, decoder=json.JSONDecoder(), buffersize=2048):
-        buffer = ''
-        first_chunk = True
-        recheck_first_chunk = False
-        for chunk in iter(partial(fileobj.read, buffersize), ''):
-            buffer += chunk
-            while buffer:
-                try:
-                    result, index = decoder.raw_decode(buffer)
-                    first_chunk = False
-                    # Try to move index to next json
-                    while (index < len(buffer)) and (buffer[index] != '{'):
-                        index = index + 1
-                    yield result
-                    buffer = buffer[index:]
-                except ValueError:
-                    # Try to cleanup first chunk until find initial json
-                    # string
-                    if first_chunk:
-                        index_first_chunk = 0
-                        while (index_first_chunk < len(buffer)) and (buffer[index_first_chunk] != '{'):
-                            index_first_chunk = index_first_chunk + 1
-                            recheck_first_chunk = True
-                        buffer = buffer[index_first_chunk:]
-                        first_chunk = False
-                        if recheck_first_chunk:
-                            recheck_first_chunk = False
-                            continue
-                    # Not enough data to decode, read more
-                    break
 
 
 def pool_recycle(pool_name, destroy_node=False, dry_mode=False, max_retry=10, wait_timeout=180,

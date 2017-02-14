@@ -4,7 +4,6 @@
 
 import os
 import unittest
-import urllib2
 import json
 
 from io import StringIO
@@ -112,7 +111,8 @@ class TsuruPoolTestCase(unittest.TestCase):
                                 "TSURU_TARGET or TSURU_TOKEN envs not set",
                                 plugin.TsuruPool, "foobar")
 
-    def test_get_nodes_from_pool(self):
+    @patch('tsuruclient.nodes.Manager.list')
+    def test_get_nodes_from_pool(self, mock):
         docker_nodes_json = '''
 {
     "machines": [
@@ -172,62 +172,70 @@ class TsuruPoolTestCase(unittest.TestCase):
     ]
 }
         '''
-        docker_nodes_null = '{ "machines": null, "nodes": null }'
-        self.urlopen_mock.side_effect = [FakeURLopenResponse(docker_nodes_json),
-                                         FakeURLopenResponse(docker_nodes_null)]
+        mock.return_value = json.loads(docker_nodes_json)
         pool_handler = plugin.TsuruPool("foobar")
         self.assertListEqual(pool_handler.get_nodes(), ['http://10.23.26.76:4243',
                                                         'http://10.25.23.138:4243'])
+
+        docker_nodes_null = '{ "machines": null, "nodes": null }'
+        mock.return_value = json.loads(docker_nodes_null)
         self.assertListEqual(pool_handler.get_nodes(), [])
 
-    def test_get_node_metadata(self):
+    @patch('tsuruclient.nodes.Manager.list')
+    def test_get_node_metadata(self, mock):
         fake_response_iaas = '''{"machines":[{"Id": "abc", "Address": "10.10.2.1",
                                               "CreationParams": {"test": "abc"}}],
                                  "nodes":[{"Address": "http://10.20.1.2:4243",
                                            "Metadata": {"test": "cde"}}]}'''
-        self.urlopen_mock.return_value = FakeURLopenResponse(fake_response_iaas, 200)
+        mock.return_value = json.loads(fake_response_iaas)
         pool_handler = plugin.TsuruPool("foobar")
         response_metadata = {u'test': u'cde'}
         self.assertEqual(pool_handler.get_node_metadata('http://10.20.1.2'), response_metadata)
 
-    def test_get_node_metadata_return_none(self):
+    @patch('tsuruclient.nodes.Manager.list')
+    def test_get_node_metadata_return_none(self, mock):
         fake_response_iaas = '''{"machines":[{"Id": "abc", "Address": "10.10.2.1",
                                               "CreationParams": {"test": "abc"}}],
                                  "nodes":[{"Address": "http://10.20.1.2:4243",
                                            "Metadata": {"test": "cde"}}]}'''
-        self.urlopen_mock.return_value = FakeURLopenResponse(fake_response_iaas, 200)
+        mock.return_value = json.loads(fake_response_iaas)
         pool_handler = plugin.TsuruPool("foobar")
         self.assertEqual(pool_handler.get_node_metadata('http://10.20.20.2'), None)
 
-    def test_get_node_metadata_return_none_on_key_error(self):
+    @patch('tsuruclient.nodes.Manager.list')
+    def test_get_node_metadata_return_none_on_key_error(self, mock):
         fake_response_iaas = []
-        self.urlopen_mock.return_value = FakeURLopenResponse(fake_response_iaas, 200)
+        mock.return_value = fake_response_iaas
         pool_handler = plugin.TsuruPool("foobar")
         self.assertEqual(pool_handler.get_node_metadata('http://10.20.20.2'), None)
 
-    def test_get_machine_metadata_from_iaas(self):
+    @patch('tsuruclient.machines.Manager.list')
+    def test_get_machine_metadata_from_iaas(self, mock):
         fake_response_iaas = '''[{"Id": "abc", "Address": "10.10.2.1", "CreationParams": {"test": "abc"}},
                                 {"Id": "def", "Address": "10.20.1.2", "CreationParams": {"test": "cde"}}]'''
-        self.urlopen_mock.return_value = FakeURLopenResponse(fake_response_iaas, 200)
+        mock.return_value = json.loads(fake_response_iaas)
         pool_handler = plugin.TsuruPool("foobar")
         response_metadata = {'metadata': {u'test': u'cde'}, 'id': u'def'}
         self.assertEqual(pool_handler.get_machine_metadata_from_iaas('http://10.20.1.2'), response_metadata)
 
-    def test_get_machine_metadata_from_iaas_return_none(self):
+    @patch('tsuruclient.machines.Manager.list')
+    def test_get_machine_metadata_from_iaas_return_none(self, mock):
         fake_response_iaas = '''[{"Id": "abc", "Address": "10.10.2.1", "CreationParams": {"test": "abc"}},
                                 {"Id": "def", "Address": "10.20.1.2", "CreationParams": {"test": "cde"}}]'''
-        self.urlopen_mock.return_value = FakeURLopenResponse(fake_response_iaas, 200)
+        mock.return_value = json.loads(fake_response_iaas)
         pool_handler = plugin.TsuruPool("foobar")
         self.assertEqual(pool_handler.get_machine_metadata_from_iaas('http://10.10.2.2'), None)
 
-    def test_get_machine_metadata_from_iaas_return_none_on_key_error(self):
+    @patch('tsuruclient.machines.Manager.list')
+    def test_get_machine_metadata_from_iaas_return_none_on_key_error(self, mock):
         fake_response_iaas = '[]'
-        self.urlopen_mock.return_value = FakeURLopenResponse(fake_response_iaas, 200)
+        mock.return_value = json.loads(fake_response_iaas)
         pool_handler = plugin.TsuruPool("foobar")
         self.assertEqual(pool_handler.get_machine_metadata_from_iaas('http://127.0.0.1'), None)
 
-    def test_create_new_node(self):
-        self.urlopen_mock.return_value = FakeURLopenResponse(None, 200)
+    @patch('tsuruclient.nodes.Manager.create')
+    def test_create_new_node(self, mock):
+        mock.return_value = {}
         pool_handler = plugin.TsuruPool("foobar")
         pool_handler.get_nodes = Mock()
         pool_handler.get_nodes.side_effect = [['192.168.1.1', 'http://10.1.1.1:2723',
@@ -237,27 +245,27 @@ class TsuruPoolTestCase(unittest.TestCase):
         return_new_node = pool_handler.create_new_node("my_template")
         self.assertEqual(return_new_node, '10.2.3.2')
 
-    @patch.object(plugin.TsuruPool, '_TsuruPool__tsuru_request')
-    def test_add_node_to_pool(self, mocked_tsuru_request):
-        mocked_tsuru_request.return_value = (200, None)
+    @patch('tsuruclient.nodes.Manager.create')
+    def test_add_node_to_pool(self, mock):
+        mock.return_value = {}
         pool_handler = plugin.TsuruPool("foobar")
         extra_params = {'bla': 'ble', 'xxx': 'yyy'}
-        pool_handler.add_node_to_pool('127.0.0.1', '4243', 'http', extra_params)
-        node_add_dict = dict({'address': 'http://127.0.0.1:4243', 'pool': 'foobar'},
-                             **extra_params)
-        mocked_tsuru_request.assert_called_once_with("POST", "/docker/node?register=true",
-                                                     node_add_dict)
+        pool_handler.add_node_to_pool('127.0.0.1', '4243', 'http',
+                                      extra_params)
+        mock.assert_called_once_with(address='http://127.0.0.1:4243',
+                                     pool="foobar", register="true",
+                                     **extra_params)
 
-    @patch.object(plugin.TsuruPool, '_TsuruPool__tsuru_request')
-    def test_add_node_to_pool_with_none_params(self, mocked_tsuru_request):
-        mocked_tsuru_request.return_value = (200, None)
+    @patch('tsuruclient.nodes.Manager.create')
+    def test_add_node_to_pool_with_none_params(self, mock):
+        mock.return_value = {}
         pool_handler = plugin.TsuruPool("foobar")
         pool_handler.add_node_to_pool('127.0.0.1', '4243', 'http', None)
-        node_add_dict = {'address': 'http://127.0.0.1:4243', 'pool': 'foobar'}
-        mocked_tsuru_request.assert_called_once_with("POST", "/docker/node?register=true",
-                                                     node_add_dict)
+        mock.assert_called_once_with(address='http://127.0.0.1:4243',
+                                     pool="foobar", register="true")
 
-    def test_return_machines_templates(self):
+    @patch('tsuruclient.templates.Manager.list')
+    def test_return_machines_templates(self, mock):
         machines_templates_json = '''
 [
     {
@@ -350,40 +358,42 @@ class TsuruPoolTestCase(unittest.TestCase):
     }
 ]
         '''
-        self.urlopen_mock.side_effect = [FakeURLopenResponse(machines_templates_json, 200),
-                                         FakeURLopenResponse(None, 500)]
+        mock.return_value = json.loads(machines_templates_json)
         pool_handler = plugin.TsuruPool("foobar")
         self.assertListEqual(pool_handler.get_machines_templates(),
                              ['template_red', 'template_yellow'])
+        mock.side_effect = Exception()
         self.assertRaisesRegexp(Exception, 'Error getting machines templates',
                                 pool_handler.get_machines_templates)
 
-    def test_remove_node_from_pool(self):
-        http_error = urllib2.HTTPError(None, 500, None, None, StringIO(u"No such node in storage"))
-        self.urlopen_mock.side_effect = [FakeURLopenResponse(None, 200), http_error]
+    @patch('tsuruclient.nodes.Manager.remove')
+    def test_remove_node_from_pool(self, mock):
+        mock.return_value = {}
         pool_handler = plugin.TsuruPool("foobar")
         return_remove_node = pool_handler.remove_node_from_pool('http://127.0.0.1:4243')
         self.assertEqual(return_remove_node, True)
+        mock.side_effect = Exception("No such node in storage")
         self.assertRaisesRegexp(Exception, 'No such node in storage',
                                 pool_handler.remove_node_from_pool,
                                 'http://127.0.0.1:4243')
 
-    def test_remove_machine_from_iaas(self):
-
+    @patch('tsuruclient.machines.Manager.list')
+    @patch('tsuruclient.machines.Manager.delete')
+    def test_remove_machine_from_iaas(self, mock_delete, mock_list):
         fake_response_iaas = '''[{"Id": "abc", "Address": "10.10.2.1", "CreationParams": {"test": "abc"}},
                                 {"Id": "def", "Address": "10.20.1.2", "CreationParams": {"test": "cde"}}]'''
 
-        self.urlopen_mock.side_effect = [FakeURLopenResponse(fake_response_iaas, 200),
-                                         FakeURLopenResponse(None, 200)]
+        mock_list.return_value = json.loads(fake_response_iaas)
         pool_handler = plugin.TsuruPool("foobar")
+        mock_delete.return_value = {}
         self.assertEqual(pool_handler.remove_machine_from_iaas("http://10.20.1.2"), True)
 
-    def test_remove_machine_from_iaas_with_node_machine_not_found_error(self):
+    @patch('tsuruclient.machines.Manager.list')
+    def test_remove_machine_from_iaas_with_node_machine_not_found_error(self, mock):
         fake_response_iaas = '''[{"Id": "abc", "Address": "10.10.2.1", "CreationParams": {"test": "abc"}},
                                 {"Id": "def", "Address": "10.20.1.2", "CreationParams": {"test": "cde"}}]'''
 
-        self.urlopen_mock.side_effect = [FakeURLopenResponse(fake_response_iaas, 200),
-                                         FakeURLopenResponse(None, 200)]
+        mock.return_value = json.loads(fake_response_iaas)
         pool_handler = plugin.TsuruPool("foobar")
         self.assertRaisesRegexp(RemoveMachineFromIaaSError, 'machine 10.20.1.20 not found on IaaS',
                                 pool_handler.remove_machine_from_iaas, '10.20.1.20')
@@ -391,15 +401,14 @@ class TsuruPoolTestCase(unittest.TestCase):
     @patch("time.sleep")
     @patch("sys.stderr")
     @patch("sys.stdout")
-    def test_move_node_containers_success(self, stdout, stderr, sleep):
-        fake_buffer = ['garbage in first chunk\ {"Message":"Moving 2 units..."}\n'
-                       '{"Message":"moving unit: abcd1234"}\n',
-                       '{"Message":"moving unit: xyzabcd234"}\n',
-                       '{ "Message":"Container moved successfully" }']
+    @patch('tsuruclient.containers.Manager.move')
+    def test_move_node_containers_success(self, mock, stdout, stderr, sleep):
+        fake_buffer = [{"Message": "Moving 2 units..."},
+                       {"Message": "moving unit: abcd1234"},
+                       {"Message": "moving unit: xyzabcd234"},
+                       {"Message": "Container moved successfully"}]
 
-        fake_buffer = "".join([x for x in fake_buffer])
-
-        self.urlopen_mock.return_value = FakeURLopenResponse(fake_buffer, 200)
+        mock.return_value = iter(fake_buffer)
 
         pool_handler = plugin.TsuruPool("foobar")
 
@@ -416,7 +425,8 @@ class TsuruPoolTestCase(unittest.TestCase):
     @patch("time.sleep")
     @patch("sys.stderr")
     @patch("sys.stdout")
-    def test_move_node_containers_invalid_host(self, stdout, stderr, sleep):
+    @patch('tsuruclient.containers.Manager.move')
+    def test_move_node_containers_invalid_host(self, mock, stdout, stderr, sleep):
         pool_handler = plugin.TsuruPool("foobar")
         self.assertRaisesRegexp(MoveNodeContainersError, 'node address .+ are invalids',
                                 pool_handler.move_node_containers,
@@ -425,7 +435,8 @@ class TsuruPoolTestCase(unittest.TestCase):
     @patch("time.sleep")
     @patch("sys.stderr")
     @patch("sys.stdout")
-    def test_move_node_containers_empty_return_stream(self, stdout, stderr, sleep):
+    @patch('tsuruclient.containers.Manager.move')
+    def test_move_node_containers_empty_return_stream(self, mock, stdout, stderr, sleep):
         fake_buffer = ''
         self.urlopen_mock.return_value = FakeURLopenResponse(fake_buffer, 200)
         with self.assertRaises(MoveNodeContainersError):
@@ -438,36 +449,34 @@ class TsuruPoolTestCase(unittest.TestCase):
     @patch("time.sleep")
     @patch("sys.stderr")
     @patch("sys.stdout")
-    def test_move_node_containers_success_after_errors(self, stdout, stderr, sleep):
-        fake_buffer_docker_connection_error = ['garbage in first chunk {"Message":"Moving 2 units..."}\n'
-                                               '{"Message":"Error moving unit: abcd1234"}\n'
-                                               '{"Message":"Error moving container: Error moving'
-                                               ' unit: cannot connect to Docker endpoint"}\n'
-                                               '{"Message":"Error moving unit: xyzabcd234"}\n',
-                                               '{"Message":"Moving 2 units..."}\n'
-                                               '{"Message":"Error moving unit: abcd1234"}\n'
-                                               '{"Message":"Error moving container: Error moving unit:'
-                                               ' cannot connect to Docker endpoint"}\n'
-                                               '{"Message":"Error moving unit: xyzabcd234"}\n',
-                                               '{"Message": "Moving unit abcd1234"}\n'
-                                               '{"Message": "Moving unit xyzabc234"}\n'
-                                               '{"Message": "Container moved successfully"}\n']
+    @patch('tsuruclient.containers.Manager.move')
+    def test_move_node_containers_success_after_errors(self, mock, stdout, stderr, sleep):
+        fake_buffer = [[{"Message": "Moving 2 units..."},
+                        {"Message": "Error moving unit: abcd1234"},
+                        {"Message": """Error moving container: Error moving
+                        unit: cannot connect to Docker endpoint"""},
+                        {"Message": "Error moving unit: xyzabcd234"}],
+                       [{"Message": "Moving 2 units..."},
+                        {"Message": "Error moving unit: abcd1234"},
+                        {"Message": """Error moving container: Error moving unit:
+                        cannot connect to Docker endpoint"""},
+                        {"Message": "Error moving unit: xyzabcd234"}],
+                       [{"Message": "Moving unit abcd1234"},
+                        {"Message": "Moving unit xyzabc234"},
+                        {"Message": "Container moved successfully"}]]
 
-        docker_connection_error = [FakeURLopenResponse(fake_buffer_docker_connection_error[0], 200),
-                                   FakeURLopenResponse(fake_buffer_docker_connection_error[1], 200),
-                                   FakeURLopenResponse(fake_buffer_docker_connection_error[2], 200)]
-
-        self.urlopen_mock.side_effect = docker_connection_error
+        mock.side_effect = [iter(fake_buffer[0]), iter(fake_buffer[1]),
+                            iter(fake_buffer[2])]
 
         pool_handler = plugin.TsuruPool("foobar")
         move_return_value = pool_handler.move_node_containers('http://1.2.3.4:123', 'http://5.6.7.8:234')
         self.assertEqual(move_return_value, True)
 
         stderr_calls = []
-        for message_block in fake_buffer_docker_connection_error:
-            for line in message_block.split('\n'):
-                if line is not '' and 'Error' in line:
-                    message = json.loads(line)['Message']
+        for message_block in fake_buffer:
+            for line in message_block:
+                if line is not '' and 'Error' in line['Message']:
+                    message = line['Message']
                     stderr_calls.append(call(str(message + '\n')))
 
         stdout_calls = [call('Moving 2 units...\n'),
@@ -487,38 +496,34 @@ class TsuruPoolTestCase(unittest.TestCase):
     @patch("time.sleep")
     @patch("sys.stderr")
     @patch("sys.stdout")
-    def test_move_node_containers_fail(self, stdout, stderr, sleep):
-        fake_buffer_docker_connection_error = ['garbage in first chunk {"Message":"Moving 2 units..."}\n'
-                                               '{"Message":"Error moving unit: abcd1234"}\n'
-                                               '{"Message":"Error moving container: Error moving'
-                                               ' unit: cannot connect to Docker endpoint"}\n'
-                                               '{"Message":"Error moving unit: xyzabcd234"}\n',
+    @patch('tsuruclient.containers.Manager.move')
+    def test_move_node_containers_fail(self, mock, stdout, stderr, sleep):
+        fake_buffer = [[{"Message": "Moving 2 units..."},
+                        {"Message": "Error moving unit: abcd1234"},
+                        {"Message": """Error moving container: Error moving
+                        unit: cannot connect to Docker endpoint"""},
+                        {"Message": "Error moving unit: xyzabcd234"}],
+                       [{"Message": "Moving 2 units..."},
+                        {"Message": "Error moving unit: abcd1234"},
+                        {"Message": """Error moving container: Error moving unit:
+                        cannot connect to Docker endpoint"""},
+                        {"Message": "Error moving unit: xyzabcd234"}],
+                       [{"Message": "Moving unit abcd1234"},
+                        {"Message": "Moving unit xyzabc234"},
+                        {"Message": "Error moving unit: 0oi99222"}]]
 
-                                               '{"Message":"Moving 2 units..."}\n'
-                                               '{"Message":"Error moving unit: abcd1234"}\n'
-                                               '{"Message":"Error moving container: Error moving unit:'
-                                               ' cannot connect to Docker endpoint"}\n'
-                                               '{"Message":"Error moving unit: xyzabcd234"}\n',
-
-                                               '{"Message": "Moving unit abcd1234"}\n'
-                                               '{"Message": "Moving unit xyzabc234"}\n'
-                                               '{"Message": "Error moving unit: 0oi99222"}\n']
-
-        docker_connection_error = [FakeURLopenResponse(fake_buffer_docker_connection_error[0], 200),
-                                   FakeURLopenResponse(fake_buffer_docker_connection_error[1], 200),
-                                   FakeURLopenResponse(fake_buffer_docker_connection_error[2], 200)]
-
-        self.urlopen_mock.side_effect = docker_connection_error
+        mock.side_effect = [iter(fake_buffer[0]), iter(fake_buffer[1]),
+                            iter(fake_buffer[2])]
 
         with self.assertRaises(MoveNodeContainersError):
             pool_handler = plugin.TsuruPool("foobar")
             pool_handler.move_node_containers('http://1.2.3.4:123', 'http://5.6.7.8:234', 0, 2)
 
         stderr_calls = []
-        for message_block in fake_buffer_docker_connection_error:
-            for line in message_block.split('\n'):
-                if line is not '' and 'Error' in line:
-                    message = json.loads(line)['Message']
+        for message_block in fake_buffer:
+            for line in message_block:
+                if line is not '' and 'Error' in line['Message']:
+                    message = line['Message']
                     stderr_calls.append(call(str(message + '\n')))
         stderr_calls.append(call('Error: Max retry reached for moving on 3 attempts.'))
 
