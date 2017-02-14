@@ -252,17 +252,22 @@ class TsuruPoolTestCase(unittest.TestCase):
         extra_params = {'bla': 'ble', 'xxx': 'yyy'}
         pool_handler.add_node_to_pool('127.0.0.1', '4243', 'http',
                                       extra_params)
-        mock.assert_called_once_with(address='http://127.0.0.1:4243',
-                                     pool="foobar", register="true",
-                                     **extra_params)
+        extra_params["address"] = "http://127.0.0.1:4243"
+        extra_params["Metadata.pool"] = "foobar"
+        extra_params["register"] = "true"
+        mock.assert_called_once_with(**extra_params)
 
     @patch('tsuruclient.nodes.Manager.create')
     def test_add_node_to_pool_with_none_params(self, mock):
         mock.return_value = {}
         pool_handler = plugin.TsuruPool("foobar")
         pool_handler.add_node_to_pool('127.0.0.1', '4243', 'http', None)
-        mock.assert_called_once_with(address='http://127.0.0.1:4243',
-                                     pool="foobar", register="true")
+        expected_call = {
+            "address": "http://127.0.0.1:4243",
+            "Metadata.pool": "foobar",
+            "register": "true",
+        }
+        mock.assert_called_once_with(**expected_call)
 
     @patch('tsuruclient.templates.Manager.list')
     def test_return_machines_templates(self, mock):
