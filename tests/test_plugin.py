@@ -304,16 +304,16 @@ class TsuruPoolTestCase(unittest.TestCase):
                                   '10.2.3.2', 'http://2.3.2.1:2123']
         plugin.pool_recycle('foobar', True)
         call_stdout_list = [call('Going to recycle 4 node(s) from pool "foobar" using 3 templates.\n'),
-                            call('Creating new node on pool "foobar" using "templateA" template\n'),
+                            call('(1/4) Creating new node on pool "foobar" using "templateA" template\n'),
                             call('Destroying node "http://127.0.0.1:4243\n'),
                             call('\n'),
-                            call('Creating new node on pool "foobar" using "templateB" template\n'),
+                            call('(2/4) Creating new node on pool "foobar" using "templateB" template\n'),
                             call('Destroying node "10.10.2.2\n'),
                             call('\n'),
-                            call('Creating new node on pool "foobar" using "templateC" template\n'),
+                            call('(3/4) Creating new node on pool "foobar" using "templateC" template\n'),
                             call('Destroying node "10.2.3.2\n'),
                             call('\n'),
-                            call('Creating new node on pool "foobar" using "templateA" template\n'),
+                            call('(4/4) Creating new node on pool "foobar" using "templateA" template\n'),
                             call('Destroying node "http://2.3.2.1:2123\n'),
                             call('\n')]
 
@@ -325,13 +325,13 @@ class TsuruPoolTestCase(unittest.TestCase):
         tsuru_pool_mock.return_value = FakeTsuruPool('foobar')
         plugin.pool_recycle('foobar', True)
         call_stdout_list = [call('Going to recycle 3 node(s) from pool "foobar" using 2 templates.\n'),
-                            call('Creating new node on pool "foobar" using "templateA" template\n'),
+                            call('(1/3) Creating new node on pool "foobar" using "templateA" template\n'),
                             call('Destroying node "127.0.0.1\n'),
                             call('\n'),
-                            call('Creating new node on pool "foobar" using "templateB" template\n'),
+                            call('(2/3) Creating new node on pool "foobar" using "templateB" template\n'),
                             call('Destroying node "10.10.1.1\n'),
                             call('\n'),
-                            call('Creating new node on pool "foobar" using "templateA" template\n'),
+                            call('(3/3) Creating new node on pool "foobar" using "templateA" template\n'),
                             call('Destroying node "10.1.1.2\n'),
                             call('\n')]
         stdout.write.assert_has_calls(call_stdout_list)

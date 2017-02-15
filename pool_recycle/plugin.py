@@ -151,21 +151,23 @@ def pool_recycle(pool_name, dry_mode=False, max_retry=10, wait_timeout=60):
     templates_len = len(pool_templates)
     template_idx = 0
     nodes_to_recycle = pool_handler.get_nodes()
-
+    recycle_len = len(nodes_to_recycle)
     sys.stdout.write('Going to recycle {} node(s) from pool "{}" using {} templates.\n'
-                     .format(len(nodes_to_recycle), pool_name, len(pool_templates)))
+                     .format(recycle_len, pool_name, len(pool_templates)))
 
     new_node = None
-    for node in nodes_to_recycle:
+    for idx, node in enumerate(nodes_to_recycle):
+        sys.stdout.write('({}/{}) Creating new node on pool "{}" '
+                         'using "{}" template\n'
+                         .format(idx+1, recycle_len,
+                                 pool_name, pool_templates[template_idx]))
+
         if dry_mode:
-            sys.stdout.write('Creating new node on pool "{}" using "{}" '
-                             'template\n'.format(pool_name, pool_templates[template_idx]))
             sys.stdout.write('Destroying node "{}\n'.format(node))
             template_idx = (template_idx + 1) % templates_len
             sys.stdout.write('\n')
             continue
-        sys.stdout.write('Creating new node on pool "{}" '
-                         'using {} template\n'.format(pool_name, pool_templates[template_idx]))
+
         new_node = pool_handler.create_new_node(pool_templates[template_idx], wait_timeout=wait_timeout)
         sys.stdout.write('Node {} successfully created.\n'.format(new_node))
         sys.stdout.write('Removing node "{}" from pool "{}"\n'.format(node, pool_name))
