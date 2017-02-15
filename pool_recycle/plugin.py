@@ -11,7 +11,12 @@ import socket
 import time
 
 from urlparse import urlparse
-from tsuruclient import client
+
+try:
+    from tsuruclient import client
+except:
+    sys.stderr.write("This plugin requires tsuruclient module: https://pypi.python.org/pypi/tsuruclient\n")
+    sys.exit(1)
 
 
 class NewNodeError(Exception):
