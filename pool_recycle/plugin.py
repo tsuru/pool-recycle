@@ -188,7 +188,7 @@ def pool_recycle(pool_name, dry_mode=False, max_retry=10, retry_interval=60):
         except Exception as ex:
             sys.stderr.write("Failed: {}".format(ex))
 
-    sys.stdout.write('Done.')
+    sys.stdout.write('Done.\n')
 
 
 def pool_recycle_parser(args):

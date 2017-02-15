@@ -300,7 +300,7 @@ class TsuruPoolTestCase(unittest.TestCase):
                             call('(4/4) Creating new node on pool "foobar" using "templateA" template\n'),
                             call('Destroying node "http://2.3.2.1:2123\n'),
                             call('\n'),
-                            call('Done.')]
+                            call('Done.\n')]
 
         self.assertEqual(stdout.write.call_args_list, call_stdout_list)
 
