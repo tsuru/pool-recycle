@@ -63,7 +63,8 @@ class TsuruPool(object):
                     pool_nodes.append(node['Address'])
         return pool_nodes
 
-    def create_new_node(self, iaas_template, curr_try=0, max_retry=10, wait_timeout=60):
+    def create_new_node(self, iaas_template, curr_try=0, max_retry=10,
+                        retry_interval=60):
         actual_nodes_list = self.get_nodes()
         try:
             data = {
@@ -86,11 +87,11 @@ class TsuruPool(object):
             raise NewNodeError("New node not found on Tsuru.")
 
         sys.stderr.write("Node creation failed. Retrying in {} seconds\n"
-                         .format(wait_timeout))
-        time.sleep(wait_timeout)
+                         .format(retry_interval))
+        time.sleep(retry_interval)
         return self.create_new_node(iaas_template=iaas_template,
                                     curr_try=curr_try+1, max_retry=max_retry,
-                                    wait_timeout=wait_timeout)
+                                    retry_interval=retry_interval)
 
     def get_machines_templates(self):
         try:
@@ -105,7 +106,7 @@ class TsuruPool(object):
                     iaas_templates.append(template['Name'])
         return iaas_templates
 
-    def remove_node(self, node, curr_try=0, max_retry=10, wait_timeout=60):
+    def remove_node(self, node, curr_try=0, max_retry=10, retry_interval=60):
         params = {"destroy": "true", "address": node}
         try:
             self.client.nodes.remove(**params)
@@ -126,11 +127,12 @@ class TsuruPool(object):
         except Exception as ex:
             if curr_try == max_retry:
                 raise RemoveNodeFromPoolError("Maximum number of retries exceeded: {}".format(ex))
-            sys.stderr.write("Node delete failed: {}. Retrying in {} seconds.\n".format(ex, wait_timeout))
-            time.sleep(wait_timeout)
+            sys.stderr.write("Node delete failed: {}. Retrying in {} seconds.\n"
+                             .format(ex, retry_interval))
+            time.sleep(retry_interval)
             return self.remove_node(node, curr_try=curr_try+1,
                                     max_retry=max_retry,
-                                    wait_timeout=wait_timeout)
+                                    retry_interval=retry_interval)
 
         return True
 
@@ -143,7 +145,7 @@ class TsuruPool(object):
             return urlparse(node_name).hostname
 
 
-def pool_recycle(pool_name, dry_mode=False, max_retry=10, wait_timeout=60):
+def pool_recycle(pool_name, dry_mode=False, max_retry=10, retry_interval=60):
     pool_handler = TsuruPool(pool_name)
     pool_templates = pool_handler.get_machines_templates()
     if pool_templates == []:
@@ -168,10 +170,13 @@ def pool_recycle(pool_name, dry_mode=False, max_retry=10, wait_timeout=60):
             sys.stdout.write('\n')
             continue
 
-        new_node = pool_handler.create_new_node(pool_templates[template_idx], wait_timeout=wait_timeout)
+        new_node = pool_handler.create_new_node(pool_templates[template_idx],
+                                                retry_interval=retry_interval)
         sys.stdout.write('Node {} successfully created.\n'.format(new_node))
-        sys.stdout.write('Removing node "{}" from pool "{}"\n'.format(node, pool_name))
-        pool_handler.remove_node(node, max_retry=max_retry, wait_timeout=wait_timeout)
+        sys.stdout.write('Removing node "{}" from pool "{}"\n'
+                         .format(node, pool_name))
+        pool_handler.remove_node(node, max_retry=max_retry,
+                                 retry_interval=retry_interval)
         template_idx = (template_idx + 1) % templates_len
         new_node = None
 
@@ -184,10 +189,11 @@ def pool_recycle_parser(args):
                         help="Dry run all recycle actions")
     parser.add_argument("-m", "--max_retry", required=False, default=10, type=int,
                         help="Max retries attempts to move a node on failure")
-    parser.add_argument("-t", "--timeout", required=False, default=60, type=int,
-                        help="Max timeout between moves on failures attempts")
+    parser.add_argument("-i", "--retry-interval", required=False, default=60, type=int,
+                        help="Time, in seconds, between retry attempts.")
     parsed = parser.parse_args(args)
-    pool_recycle(parsed.pool, parsed.dry_run, parsed.max_retry, parsed.timeout)
+    pool_recycle(parsed.pool, parsed.dry_run, parsed.max_retry,
+                 parsed.retry_interval)
 
 
 def main(args=None):

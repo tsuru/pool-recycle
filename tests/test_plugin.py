@@ -340,7 +340,7 @@ class TsuruPoolTestCase(unittest.TestCase):
     @patch('sys.stdout')
     @patch('pool_recycle.plugin.pool_recycle')
     def test_pool_recycle_parser_with_all_options_set(self, pool_recycle, stdout, stderr):
-        args = ["-p", "foobar", "-d", "-m", "100", "-t", "30"]
+        args = ["-p", "foobar", "-d", "-m", "100", "-i", "30"]
         plugin.pool_recycle_parser(args)
         pool_recycle.assert_called_once_with('foobar', True, 100, 30)
 
