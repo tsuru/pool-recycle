@@ -64,11 +64,14 @@ class FakeTsuruPool(object):
 
 class TsuruPoolTestCase(unittest.TestCase):
 
-    def setUp(self):
+    @patch('tsuruclient.users.Manager.info')
+    def setUp(self, users_mock):
+        users_mock.return_value = {"Email": "myuser"}
         os.environ["TSURU_TARGET"] = "https://cloud.tsuru.io/"
         os.environ["TSURU_TOKEN"] = "abc123"
         self.patcher = patch('urllib2.urlopen')
         self.urlopen_mock = self.patcher.start()
+        self.pool_handler = plugin.TsuruPool("foobar")
 
     def test_missing_env_var(self):
         del os.environ['TSURU_TOKEN']
@@ -138,24 +141,27 @@ class TsuruPoolTestCase(unittest.TestCase):
 }
         '''
         mock.return_value = json.loads(docker_nodes_json)
-        pool_handler = plugin.TsuruPool("foobar")
-        self.assertListEqual(pool_handler.get_nodes(), ['http://10.23.26.76:4243',
-                                                        'http://10.25.23.138:4243'])
+        self.assertListEqual(self.pool_handler.get_nodes(),
+                             ['http://10.23.26.76:4243',
+                             'http://10.25.23.138:4243'])
 
         docker_nodes_null = '{ "machines": null, "nodes": null }'
         mock.return_value = json.loads(docker_nodes_null)
-        self.assertListEqual(pool_handler.get_nodes(), [])
+        self.assertListEqual(self.pool_handler.get_nodes(), [])
 
     @patch('tsuruclient.nodes.Manager.create')
-    def test_create_new_node(self, mock):
-        mock.return_value = {}
-        pool_handler = plugin.TsuruPool("foobar")
-        pool_handler.get_nodes = Mock()
-        pool_handler.get_nodes.side_effect = [['192.168.1.1', 'http://10.1.1.1:2723',
-                                               '10.10.10.1'],
-                                              ['192.168.1.1', '10.2.3.2', '10.10.10.1',
-                                               'http://10.1.1.1:2723']]
-        return_new_node = pool_handler.create_new_node("my_template")
+    @patch('tsuruclient.events.Manager.list')
+    def test_create_new_node(self, mock_list, mock_create):
+        mock_list.return_value = [{"Running": False, "Error": "", "Target": {"Value": "10.2.3.2"}}]
+        mock_create.return_value = {}
+        self.pool_handler.get_nodes = Mock()
+        self.pool_handler.get_nodes.side_effect = [['192.168.1.1',
+                                                    'http://10.1.1.1:2723',
+                                                    '10.10.10.1'],
+                                                   ['192.168.1.1', '10.2.3.2',
+                                                    '10.10.10.1',
+                                                    'http://10.1.1.1:2723']]
+        return_new_node = self.pool_handler.create_new_node("my_template")
         self.assertEqual(return_new_node, '10.2.3.2')
 
     @patch('tsuruclient.templates.Manager.list')
@@ -253,31 +259,30 @@ class TsuruPoolTestCase(unittest.TestCase):
 ]
         '''
         mock.return_value = json.loads(machines_templates_json)
-        pool_handler = plugin.TsuruPool("foobar")
-        self.assertListEqual(pool_handler.get_machines_templates(),
+        self.assertListEqual(self.pool_handler.get_machines_templates(),
                              ['template_red', 'template_yellow'])
         mock.side_effect = Exception()
         self.assertRaisesRegexp(Exception, 'Error getting machines templates',
-                                pool_handler.get_machines_templates)
+                                self.pool_handler.get_machines_templates)
 
     @patch('tsuruclient.events.Manager.list')
     @patch('tsuruclient.nodes.Manager.remove')
     def test_remove_node(self, mock_delete, mock_events):
-        mock_events.return_value = [{"Running": "false", "Error": ""}]
+        node = 'http://127.0.0.1:4243'
+        mock_events.return_value = [{"Running": False, "Error": ""}]
         mock_delete.return_value = {}
-        pool_handler = plugin.TsuruPool("foobar")
-        return_remove_node = pool_handler.remove_node('http://127.0.0.1:4243',
-                                                      max_retry=0)
+        return_remove_node = self.pool_handler.remove_node(node, max_retry=0)
         self.assertEqual(return_remove_node, True)
         mock_delete.side_effect = Exception("No such node in storage")
         self.assertRaisesRegexp(Exception, 'No such node in storage',
-                                pool_handler.remove_node,
-                                'http://127.0.0.1:4243', 0, 0)
+                                self.pool_handler.remove_node, node, 0, 0)
 
     @patch("sys.stdout")
     @patch('pool_recycle.plugin.TsuruPool.get_nodes')
     @patch('pool_recycle.plugin.TsuruPool.get_machines_templates')
-    def test_pool_recycle_on_dry_mode(self, get_machines_templates, get_nodes, stdout):
+    @patch('tsuruclient.users.Manager.info')
+    def test_pool_recycle_on_dry_mode(self, users, get_machines_templates, get_nodes, stdout):
+        users.return_value = {"Email": "myuser"}
         get_machines_templates.return_value = ['templateA', 'templateB', 'templateC']
         get_nodes.return_value = ['http://127.0.0.1:4243', '10.10.2.2',
                                   '10.2.3.2', 'http://2.3.2.1:2123']

@@ -47,6 +47,10 @@ class TsuruPool(object):
             self.client = client.Client(self.tsuru_target, self.tsuru_token)
         except KeyError:
             raise KeyError("TSURU_TARGET or TSURU_TOKEN envs not set")
+        try:
+            self.user = self.client.users.info()
+        except Exception as ex:
+            raise Exception("Failed to get current user info: {}".format(ex))
         self.pool = pool
 
     def get_nodes(self):
@@ -65,33 +69,29 @@ class TsuruPool(object):
 
     def create_new_node(self, iaas_template, curr_try=0, max_retry=10,
                         retry_interval=60):
-        actual_nodes_list = self.get_nodes()
         try:
             data = {
                 "register": "false",
                 "Metadata.template": iaas_template
             }
-            create_stream = self.client.nodes.create(**data)
+            self.client.nodes.create(**data)
+            eventArgs = {
+                "ownername": self.user["Email"],
+                "kindname": "node.create",
+            }
+            event = self.wait_event("Node create", **eventArgs)
         except Exception as ex:
-            raise NewNodeError("{}".format(ex))
-
-        for l in create_stream:
-            continue
-
-        new_nodes_list = self.get_nodes()
-        new_node = set(new_nodes_list) - set(actual_nodes_list)
-        if len(new_node) == 1:
-            return new_node.pop()
-
-        if curr_try == max_retry:
-            raise NewNodeError("New node not found on Tsuru.")
-
-        sys.stderr.write("Node creation failed. Retrying in {} seconds\n"
-                         .format(retry_interval))
-        time.sleep(retry_interval)
-        return self.create_new_node(iaas_template=iaas_template,
-                                    curr_try=curr_try+1, max_retry=max_retry,
-                                    retry_interval=retry_interval)
+            if curr_try == max_retry:
+                raise NewNodeError("Maximum number of retries exceeded: {}"
+                                   .format(ex))
+            sys.stderr.write("Node creation failed: {}. Retrying in {} seconds\n"
+                             .format(ex, retry_interval))
+            time.sleep(retry_interval)
+            return self.create_new_node(iaas_template=iaas_template,
+                                        curr_try=curr_try+1,
+                                        max_retry=max_retry,
+                                        retry_interval=retry_interval)
+        return event["Target"]["Value"]
 
     def get_machines_templates(self):
         try:
@@ -106,8 +106,21 @@ class TsuruPool(object):
                     iaas_templates.append(template['Name'])
         return iaas_templates
 
+    def wait_event(self, msg, **kwargs):
+        running = True
+        while running:
+            event = self.client.events.list(**kwargs)[0]
+            running = event["Running"]
+            if event["Error"] != "":
+                raise Exception(event["Error"])
+            if running:
+                sys.stdout.write("{} still running. Sleeping for 15 seconds.\n"
+                                 .format(msg))
+                time.sleep(15)
+        return event
+
     def remove_node(self, node, curr_try=0, max_retry=10, retry_interval=60):
-        params = {"destroy": "true", "address": node}
+        params = {"remove-iaas": "true", "address": node}
         try:
             self.client.nodes.remove(**params)
             eventArgs = {
@@ -115,15 +128,7 @@ class TsuruPool(object):
                 "target.type": "node",
                 "target.value": node,
             }
-            running = True
-            while running:
-                event = self.client.events.list(**eventArgs)[0]
-                running = event["Running"] == "true"
-                if event["Error"] != "":
-                    raise RemoveNodeFromPoolError(event["Error"])
-                if running:
-                    sys.stdout.write("Node delete still running. Sleeping for 15 seconds.\n")
-                    time.sleep(15)
+            self.wait_event("Node delete", **eventArgs)
         except Exception as ex:
             if curr_try == max_retry:
                 raise RemoveNodeFromPoolError("Maximum number of retries exceeded: {}".format(ex))
