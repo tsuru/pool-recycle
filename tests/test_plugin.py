@@ -61,6 +61,9 @@ class FakeTsuruPool(object):
     def get_node_metadata(self, node):
         return {'bla': 'ble', 'xxx': 'yyy'}
 
+    def disable_healing(self):
+        return self.disable_healing
+
 
 class TsuruPoolTestCase(unittest.TestCase):
 
@@ -277,12 +280,45 @@ class TsuruPoolTestCase(unittest.TestCase):
         self.assertRaisesRegexp(Exception, 'No such node in storage',
                                 self.pool_handler.remove_node, node, 0, 0)
 
+    @patch('tsuruclient.healings.Manager.remove')
+    @patch('tsuruclient.healings.Manager.update')
+    @patch('tsuruclient.healings.Manager.list')
+    def test_disable_healing_remove_after(self, mock_list, mock_update, mock_remove):
+        mock_remove.return_value = {}
+        mock_update.return_value = {}
+        mock_list.return_value = {}
+        enable = self.pool_handler.disable_healing()
+        self.assertEqual(mock_update.call_args_list, [call(Enabled=False, pool="foobar")])
+        enable()
+        self.assertEqual(1, mock_remove.call_count)
+
+    @patch('tsuruclient.healings.Manager.remove')
+    @patch('tsuruclient.healings.Manager.update')
+    @patch('tsuruclient.healings.Manager.list')
+    def test_disable_healing_update_after(self, mock_list, mock_update, mock_remove):
+        mock_remove.return_value = {}
+        mock_update.return_value = {}
+        mock_list.return_value = {"foobar": {"Enabled": True}}
+        enable = self.pool_handler.disable_healing()
+        self.assertEqual(mock_update.call_args_list, [call(Enabled=False,
+                                                           pool="foobar")])
+        enable()
+        self.assertEqual(0, mock_remove.call_count)
+        self.assertEqual(mock_update.call_args_list, [call(Enabled=False,
+                                                           pool="foobar"),
+                                                      call(Enabled=True,
+                                                           pool="foobar")])
+
     @patch("sys.stdout")
     @patch('pool_recycle.plugin.TsuruPool.get_nodes')
     @patch('pool_recycle.plugin.TsuruPool.get_machines_templates')
+    @patch('pool_recycle.plugin.TsuruPool.disable_healing')
     @patch('tsuruclient.users.Manager.info')
-    def test_pool_recycle_on_dry_mode(self, users, get_machines_templates, get_nodes, stdout):
+    def test_pool_recycle_on_dry_mode(self, users, disable_healing,
+                                      get_machines_templates, get_nodes,
+                                      stdout):
         users.return_value = {"Email": "myuser"}
+        disable_healing.return_value = disable_healing
         get_machines_templates.return_value = ['templateA', 'templateB', 'templateC']
         get_nodes.return_value = ['http://127.0.0.1:4243', '10.10.2.2',
                                   '10.2.3.2', 'http://2.3.2.1:2123']
@@ -303,6 +339,7 @@ class TsuruPoolTestCase(unittest.TestCase):
                             call('Done.\n')]
 
         self.assertEqual(stdout.write.call_args_list, call_stdout_list)
+        self.assertEqual(2, disable_healing.call_count)
 
     @patch("sys.stdout")
     @patch('pool_recycle.plugin.TsuruPool')

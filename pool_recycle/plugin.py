@@ -154,6 +154,21 @@ class TsuruPool(object):
         except socket.error:
             return urlparse(node_name).hostname
 
+    def disable_healing(self):
+        sys.stdout.write("Disabling healing for pool.\n")
+        healing = self.client.healings.list()
+        if self.pool in healing:
+            def clean_up():
+                sys.stdout.write("Re-enabling healing for pool.\n")
+                self.client.healings.update(**{"pool": self.pool,
+                                               "Enabled": healing[self.pool]["Enabled"]})
+        else:
+            def clean_up():
+                sys.stdout.write("Removing disabled healing.\n")
+                self.client.healings.remove(self.pool)
+        self.client.healings.update(**{"pool": self.pool, "Enabled": False})
+        return clean_up
+
 
 def pool_recycle(pool_name, dry_mode=False, max_retry=10, retry_interval=60):
     pool_handler = TsuruPool(pool_name)
@@ -166,7 +181,7 @@ def pool_recycle(pool_name, dry_mode=False, max_retry=10, retry_interval=60):
     recycle_len = len(nodes_to_recycle)
     sys.stdout.write('Going to recycle {} node(s) from pool "{}" using {} templates.\n'
                      .format(recycle_len, pool_name, len(pool_templates)))
-
+    enable_healing = pool_handler.disable_healing()
     new_node = None
     for idx, node in enumerate(nodes_to_recycle):
         sys.stdout.write('({}/{}) Creating new node on pool "{}" '
@@ -190,9 +205,12 @@ def pool_recycle(pool_name, dry_mode=False, max_retry=10, retry_interval=60):
                                      retry_interval=retry_interval)
             template_idx = (template_idx + 1) % templates_len
             new_node = None
-        except Exception as ex:
-            sys.stderr.write("Failed: {}".format(ex))
+        except (Exception, KeyboardInterrupt), e:
+            sys.stderr.write("Failed: {}\n".format(e))
+            enable_healing()
+            sys.exit(1)
 
+    enable_healing()
     sys.stdout.write('Done.\n')
 
 
