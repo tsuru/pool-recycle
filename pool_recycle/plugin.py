@@ -118,8 +118,8 @@ class TsuruPool(object):
             while running:
                 event = self.client.events.list(**eventArgs)[0]
                 running = event["Running"] == "true"
-                if event["Error"] == "true":  # TODO: check this
-                    raise RemoveNodeFromPoolError(event)
+                if event["Error"] != "":
+                    raise RemoveNodeFromPoolError(event["Error"])
                 if running:
                     sys.stdout.write("Node delete still running. Sleeping for 15 seconds.\n")
                     time.sleep(15)

@@ -283,8 +283,8 @@ class TsuruPoolTestCase(unittest.TestCase):
 
     @patch('tsuruclient.events.Manager.list')
     @patch('tsuruclient.nodes.Manager.remove')
-    def test_remove_node_from_pool(self, mock_delete, mock_events):
-        mock_events.return_value = [{"Running": "false", "Error": "false"}]
+    def test_remove_node(self, mock_delete, mock_events):
+        mock_events.return_value = [{"Running": "false", "Error": ""}]
         mock_delete.return_value = {}
         pool_handler = plugin.TsuruPool("foobar")
         return_remove_node = pool_handler.remove_node('http://127.0.0.1:4243',
