@@ -6,7 +6,6 @@ import os
 import unittest
 import json
 
-from io import StringIO
 from mock import patch, Mock, call
 from pool_recycle import plugin
 from pool_recycle.plugin import (RemoveNodeFromPoolError, NewNodeError)
@@ -61,26 +60,6 @@ class FakeTsuruPool(object):
 
     def get_node_metadata(self, node):
         return {'bla': 'ble', 'xxx': 'yyy'}
-
-
-class FakeURLopenResponse(StringIO):
-
-    def __init__(self, *args):
-        try:
-            self.code = args[1]
-        except IndexError:
-            self.code = 200
-            pass
-        try:
-            self.msg = args[2]
-        except IndexError:
-            self.msg = "OK"
-            pass
-        self.headers = {'content-type': 'text/plain; charset=utf-8'}
-        StringIO.__init__(self, unicode(args[0]))
-
-    def getcode(self):
-        return self.code
 
 
 class TsuruPoolTestCase(unittest.TestCase):
