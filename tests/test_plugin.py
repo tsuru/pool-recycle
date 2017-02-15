@@ -295,7 +295,8 @@ class TsuruPoolTestCase(unittest.TestCase):
     @patch('tsuruclient.healings.Manager.remove')
     @patch('tsuruclient.healings.Manager.update')
     @patch('tsuruclient.healings.Manager.list')
-    def test_disable_healing_update_after(self, mock_list, mock_update, mock_remove):
+    def test_disable_healing_update_after(self, mock_list, mock_update,
+                                          mock_remove):
         mock_remove.return_value = {}
         mock_update.return_value = {}
         mock_list.return_value = {"foobar": {"Enabled": True}}
