@@ -63,7 +63,7 @@ class TsuruPool(object):
                     pool_nodes.append(node['Address'])
         return pool_nodes
 
-    def create_new_node(self, iaas_template, curr_try=0, max_retry=10, wait_timeout=180):
+    def create_new_node(self, iaas_template, curr_try=0, max_retry=10, wait_timeout=60):
         actual_nodes_list = self.get_nodes()
         try:
             data = {
@@ -105,7 +105,7 @@ class TsuruPool(object):
                     iaas_templates.append(template['Name'])
         return iaas_templates
 
-    def remove_node(self, node, curr_try=0, max_retry=10, wait_timeout=180):
+    def remove_node(self, node, curr_try=0, max_retry=10, wait_timeout=60):
         params = {"destroy": "true", "address": node}
         try:
             self.client.nodes.remove(**params)
@@ -143,7 +143,7 @@ class TsuruPool(object):
             return urlparse(node_name).hostname
 
 
-def pool_recycle(pool_name, dry_mode=False, max_retry=10, wait_timeout=180):
+def pool_recycle(pool_name, dry_mode=False, max_retry=10, wait_timeout=60):
     pool_handler = TsuruPool(pool_name)
     pool_templates = pool_handler.get_machines_templates()
     if pool_templates == []:
@@ -182,7 +182,7 @@ def pool_recycle_parser(args):
                         help="Dry run all recycle actions")
     parser.add_argument("-m", "--max_retry", required=False, default=10, type=int,
                         help="Max retries attempts to move a node on failure")
-    parser.add_argument("-t", "--timeout", required=False, default=180, type=int,
+    parser.add_argument("-t", "--timeout", required=False, default=60, type=int,
                         help="Max timeout between moves on failures attempts")
     parsed = parser.parse_args(args)
     pool_recycle(parsed.pool, parsed.dry_run, parsed.max_retry, parsed.timeout)
