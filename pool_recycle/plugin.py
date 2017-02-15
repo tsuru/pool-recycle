@@ -175,15 +175,20 @@ def pool_recycle(pool_name, dry_mode=False, max_retry=10, retry_interval=60):
             sys.stdout.write('\n')
             continue
 
-        new_node = pool_handler.create_new_node(pool_templates[template_idx],
-                                                retry_interval=retry_interval)
-        sys.stdout.write('Node {} successfully created.\n'.format(new_node))
-        sys.stdout.write('Removing node "{}" from pool "{}"\n'
-                         .format(node, pool_name))
-        pool_handler.remove_node(node, max_retry=max_retry,
-                                 retry_interval=retry_interval)
-        template_idx = (template_idx + 1) % templates_len
-        new_node = None
+        try:
+            new_node = pool_handler.create_new_node(pool_templates[template_idx],
+                                                    retry_interval=retry_interval)
+            sys.stdout.write('Node {} successfully created.\n'.format(new_node))
+            sys.stdout.write('Removing node "{}" from pool "{}"\n'
+                             .format(node, pool_name))
+            pool_handler.remove_node(node, max_retry=max_retry,
+                                     retry_interval=retry_interval)
+            template_idx = (template_idx + 1) % templates_len
+            new_node = None
+        except Exception as ex:
+            sys.stderr.write("Failed: {}".format(ex))
+
+    sys.stdout.write('Done.')
 
 
 def pool_recycle_parser(args):
