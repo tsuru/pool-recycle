@@ -84,7 +84,7 @@ class TsuruPool(object):
                 "ownername": self.user["Email"],
                 "kindname": "node.create",
             }
-            event = self.wait_event("Node create", **eventArgs)
+            event = self.wait_event("Node create", max_retry=max_retry, **eventArgs)
         except Exception as ex:
             if curr_try == max_retry:
                 raise NewNodeError("Maximum number of retries exceeded: {}"
@@ -111,10 +111,21 @@ class TsuruPool(object):
                     iaas_templates.append(template['Name'])
         return iaas_templates
 
-    def wait_event(self, msg, **kwargs):
+    def wait_event(self, msg, max_retry=10, **kwargs):
         running = True
+        curr_try = 0
         while running:
-            event = self.client.events.list(**kwargs)[0]
+            try:
+                event = self.client.events.list(**kwargs)[0]
+            except Exception, ex:
+                if curr_try == max_retry:
+                    sys.stderr.write("Failed to retrieve event.")
+                    raise ex
+                curr_try = curr_try + 1
+                sys.stderr.write("Failed to get event. Retrying in 15 seconds.")
+                time.sleep(15)
+                continue
+            curr_try = 0
             running = event["Running"]
             if event["Error"] != "":
                 raise Exception(event["Error"])
@@ -133,7 +144,7 @@ class TsuruPool(object):
                 "target.type": "node",
                 "target.value": node,
             }
-            self.wait_event("Node delete", **eventArgs)
+            self.wait_event("Node delete", max_retry=max_retry, **eventArgs)
         except Exception as ex:
             if curr_try == max_retry:
                 raise RemoveNodeFromPoolError("Maximum number of retries exceeded: {}".format(ex))
