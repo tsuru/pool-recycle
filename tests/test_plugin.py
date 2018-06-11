@@ -92,6 +92,7 @@ class TsuruPoolTestCase(unittest.TestCase):
             "Iaas": "cloudstack",
             "Status": "running",
             "Address": "10.10.34.221",
+            "Pool": "foobar",
             "CreationParams": {
                 "displayname": "machine_a",
                 "pool": "foobar"
@@ -102,6 +103,7 @@ class TsuruPoolTestCase(unittest.TestCase):
             "Iaas": "cloudstack",
             "Status": "running",
             "Address": "10.20.42.42",
+            "Pool": "bilbo",
             "CreationParams": {
                 "displayname": "machine_b",
                 "pool": "bilbo"
@@ -120,6 +122,7 @@ class TsuruPoolTestCase(unittest.TestCase):
     "nodes": [
         {
             "Address": "http://10.2.25.169:4243",
+            "Pool": "bilbo",
             "Metadata": {
                 "pool": "bilbo"
             },
@@ -127,6 +130,7 @@ class TsuruPoolTestCase(unittest.TestCase):
         },
         {
             "Address": "http://10.23.26.76:4243",
+            "Pool": "foobar",
             "Metadata": {
                 "pool": "foobar"
             },
@@ -134,6 +138,7 @@ class TsuruPoolTestCase(unittest.TestCase):
         },
         {
             "Address": "http://10.25.23.138:4243",
+            "Pool": "foobar",
             "Metadata": {
                 "LastSuccess": "2015-02-04T11:47:54-02:00",
                 "pool": "foobar"
