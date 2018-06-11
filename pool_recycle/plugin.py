@@ -67,7 +67,7 @@ class TsuruPool(object):
         pool_nodes = []
         if 'nodes' in docker_nodes and docker_nodes['nodes'] is not None:
             for node in docker_nodes['nodes']:
-                if ('pool' in node['Metadata'] and node['Metadata']['pool'] == self.pool or 'tsuru.io/pool' in node['Metadata'] and node['Metadata']['tsuru.io/pool'] == self.pool):
+                if (node.get('Pool') == self.pool):
                     pool_nodes.append(node['Address'])
         return pool_nodes
 
